@@ -1,0 +1,31 @@
+<div class="card" id="booking-section">
+  <div class="card-head">
+    <h2>Bookings</h2>
+    {% if available_slots %}
+      <a class="btn btn-sm btn-ghost" href="{% url 'bookings_admin:admin_create' %}?event={{ event.pk }}&slot={{ available_slots.0.pk }}">Book for a visitor</a>
+    {% endif %}
+  </div>
+
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>When</th><th>Visitor</th><th>Host</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for b in bookings %}
+        <tr>
+          <td>{% if b.slot %}{{ b.slot.date|date:"j M" }} · {{ b.slot.start_time|time:"H:i" }}{% else %}—{% endif %}</td>
+          <td>
+            <a href="{% url 'bookings_admin:admin_detail' b.pk %}"><strong>{{ b.visitor_name }}</strong></a>
+            <div class="muted">{{ b.visitor_email }}{% if b.company %} · {{ b.company }}{% endif %}</div>
+            {% if b.needs_attention %}<span class="pill pill-gold">Needs attention</span>{% endif %}
+          </td>
+          <td>{% if b.slot %}{{ b.slot.host.name }}{% else %}—{% endif %}</td>
+          <td><span class="pill {{ b.status }}">{{ b.get_status_display }}</span></td>
+          <td><div class="row-actions"><a class="btn btn-sm btn-ghost" href="{% url 'bookings_admin:admin_detail' b.pk %}">Open</a></div></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty-row muted">No bookings yet. Share the public link once the event is live.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

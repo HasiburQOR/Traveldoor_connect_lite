@@ -1,0 +1,90 @@
+<div class="card" id="slot-section">
+  <div class="card-head">
+    <h2>Slots <span class="muted" style="font-family:var(--font-ui);font-size:13px;font-weight:400;">{{ slots|length }}</span></h2>
+    <div class="actions" style="margin-top:0;">
+      <button class="btn btn-sm btn-ghost" hx-get="{% url 'events:slot_bulk' event.pk %}"
+              hx-target="#slot-form" hx-swap="innerHTML show:#slot-form:top">Bulk generate</button>
+      <button class="btn btn-sm btn-secondary" hx-get="{% url 'events:slot_add' event.pk %}"
+              hx-target="#slot-form" hx-swap="innerHTML show:#slot-form:top">Add slot</button>
+    </div>
+  </div>
+
+  <p class="helptext" style="margin:-8px 0 16px;">
+    {% if event.is_online %}Every slot on this event is a video call. Slots without a meeting link stay hidden from visitors.
+    {% else %}Every slot on this event is in person. Slots fall back to the event's venue, hall and table unless you override them.{% endif %}
+  </p>
+
+  {# An open (or rejected) form lives here, inside the swap target. #}
+  <div id="slot-form">
+    {% if bulk_form %}{% include "events/partials/slot_bulk_form.html" with form=bulk_form %}
+    {% elif form %}{% include "events/partials/slot_form.html" with form=form slot=slot %}
+    {% endif %}
+  </div>
+
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>Date</th><th>Time</th><th>Host</th>
+          <th>{% if event.is_online %}Meeting link{% else %}Where{% endif %}</th>
+          <th>Booked</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {# Grouped by day: the bulk generator makes 48+ slots and a flat list of
+           identical-looking rows is unreadable. #}
+        {% regroup slots by date as slot_days %}
+        {% for day in slot_days %}
+        <tr class="day-header">
+          <td colspan="7">
+            <strong>{{ day.grouper|date:"l, j F" }}</strong>
+            <span class="muted">{{ day.list|length }} slot{{ day.list|length|pluralize }}</span>
+          </td>
+        </tr>
+        {% for s in day.list %}
+        <tr{% if s.is_break %} class="is-break"{% endif %}>
+          <td>{{ s.date|date:"j M" }}</td>
+          <td>{{ s.start_time|time:"H:i" }} <span class="muted">{{ s.duration_minutes }}m</span></td>
+          <td>{{ s.host.name }}</td>
+          <td class="muted">
+            {% if s.is_break %}
+              <span class="muted">Not bookable</span>
+            {% elif event.is_online %}
+              {% if s.effective_meeting_link %}
+                <a class="mono" href="{{ s.effective_meeting_link }}">{{ s.effective_provider_display|default:"Link" }}</a>
+              {% else %}<span class="pill pill-gold">No link — hidden</span>{% endif %}
+            {% else %}
+              {{ s.effective_venue|default:"—" }}{% if s.effective_hall %} · {{ s.effective_hall }}{% endif %}{% if s.effective_table %} · {{ s.effective_table }}{% endif %}
+            {% endif %}
+          </td>
+          <td>{% if s.is_break %}<span class="muted">—</span>{% else %}{{ s.bookings.all|length }}/{{ s.capacity }}{% endif %}</td>
+          <td>
+            <span class="pill {{ s.status }}">{{ s.get_status_display }}</span>
+            {% if not s.is_break and s.bookings.all|length >= s.capacity and s.status == "available" %}<span class="pill pill-gold">Full</span>{% endif %}
+          </td>
+          <td><div class="row-actions">
+            <button type="button" class="btn btn-sm btn-ghost" hx-get="{% url 'events:slot_edit' event.pk s.pk %}"
+                    hx-target="#slot-form" hx-swap="innerHTML show:#slot-form:top">Edit</button>
+            {% if s.is_break %}
+            {% elif s.status != "closed" %}
+              <form class="inline" method="post" action="{% url 'events:slot_close' event.pk s.pk %}"
+                    hx-post="{% url 'events:slot_close' event.pk s.pk %}" hx-target="#slot-section" hx-swap="outerHTML">
+                {% csrf_token %}<button class="btn btn-sm btn-ghost">Close</button></form>
+            {% else %}
+              <form class="inline" method="post" action="{% url 'events:slot_reopen' event.pk s.pk %}"
+                    hx-post="{% url 'events:slot_reopen' event.pk s.pk %}" hx-target="#slot-section" hx-swap="outerHTML">
+                {% csrf_token %}<button class="btn btn-sm btn-secondary">Reopen</button></form>
+            {% endif %}
+            <form class="inline" method="post" action="{% url 'events:slot_delete' event.pk s.pk %}"
+                  hx-post="{% url 'events:slot_delete' event.pk s.pk %}" hx-target="#slot-section" hx-swap="outerHTML"
+                  hx-confirm="Delete this slot? Confirmed bookings on it will be cancelled and visitors emailed.">
+              {% csrf_token %}<button class="btn btn-sm btn-danger">Delete</button></form>
+          </div></td>
+        </tr>
+        {% endfor %}
+        {% empty %}
+        <tr><td colspan="7" class="empty-row muted">No slots yet — add one, or use the bulk generator to fill a whole day.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>

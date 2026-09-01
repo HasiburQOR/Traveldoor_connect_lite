@@ -1,0 +1,22 @@
+Hi {{ booking.visitor_name }},
+
+Your meeting is CONFIRMED.
+{% if is_online %}This is a video call - join from anywhere using the link below.{% else %}This is an in-person meeting. Full address details are below.{% endif %}
+
+  Event:     {{ event.name }}
+  Host:      {{ host.name }}{% if host.role %} ({{ host.role }}){% endif %}
+  When:      {{ when }}
+  Duration:  {{ duration }}
+{% include "emails/_where_rows.txt" %}
+{% if not is_online %}PLEASE BRING THIS EMAIL WITH YOU. Show it at the venue when you
+arrive - it is how we confirm your booking at {{ hall_name }}, {{ table_name }}.
+{% endif %}
+Add to calendar:
+  Google Calendar: {{ google_calendar_url }}
+  Outlook:         {{ outlook_calendar_url }}
+
+Need to move or cancel? Use your personal manage link:
+  {{ base_url }}{{ manage_url }}
+
+See you soon.
+{{ company_name }} Connect

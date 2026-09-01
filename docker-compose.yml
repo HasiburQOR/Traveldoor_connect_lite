@@ -1,0 +1,62 @@
+# Local development / testing stack - web + background scheduler + PostgreSQL.
+#
+#   docker compose up --build                # -> http://127.0.0.1:8000
+#   docker compose exec web python manage.py createsuperuser
+#   docker compose logs -f web scheduler
+#   docker compose down -v                   # stop and wipe the database
+#
+# Values are read from .env at the project root when present (compose
+# interpolates ${VAR:-default} from it); safe dev defaults apply otherwise.
+# For Dokploy use docker-compose.dokploy.yml instead.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: traveldoor
+      POSTGRES_USER: traveldoor
+      POSTGRES_PASSWORD: traveldoor
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U traveldoor -d traveldoor"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  web:
+    build: .
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: "postgresql://traveldoor:traveldoor@db:5432/traveldoor"
+      DJANGO_DEBUG: "${DJANGO_DEBUG:-true}"
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-django-insecure-dev-only-key-change-me-in-production-0123456789}"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,testserver}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://127.0.0.1:8000}"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  scheduler:
+    build: .
+    command: ["scheduler"]
+    # The image HEALTHCHECK probes HTTP; the scheduler runs the reminder loop
+    # instead, so disable it (the container exiting is the failure signal).
+    healthcheck:
+      disable: true
+    environment:
+      DATABASE_URL: "postgresql://traveldoor:traveldoor@db:5432/traveldoor"
+      DJANGO_DEBUG: "${DJANGO_DEBUG:-true}"
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-django-insecure-dev-only-key-change-me-in-production-0123456789}"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,testserver}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://127.0.0.1:8000}"
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

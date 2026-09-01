@@ -1,0 +1,10 @@
+{% extends "base_public.html" %}
+{% block title %}{{ event.name }} — bookings closed{% endblock %}
+{% block wrap_class %} is-narrow{% endblock %}
+{% block content %}
+<div class="state">
+  <h1>Bookings are closed</h1>
+  <p>{{ event.name }} isn't taking new bookings{% if event.is_expired %} — the event has now finished{% endif %}.</p>
+  <p>Already have a meeting booked? Use the personal link in your confirmation email to view, move or cancel it.</p>
+</div>
+{% endblock %}

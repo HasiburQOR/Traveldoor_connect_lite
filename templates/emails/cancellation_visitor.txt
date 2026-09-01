@@ -1,0 +1,16 @@
+Hi {{ booking.visitor_name }},
+
+Your meeting has been CANCELLED by {{ actor_label }}.
+
+  Event:       {{ event.name }}
+  Host:        {{ host.name }}
+  Was set for: {{ when }}
+  Format:      {% if is_online %}Video call{% else %}In person{% if venue %} - {{ venue }}{% endif %}{% endif %}
+  Reason:      {{ reason|default:"Not given" }}
+
+{% if is_online %}The video link for this meeting is no longer valid.{% else %}There is no need to travel to the venue.{% endif %}
+
+Sorry for the inconvenience. If the event is still running you are very
+welcome to pick another time.
+
+{{ company_name }} Connect

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Admin users — TravelDoor Connect{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Admin users</h1>
+    <p class="sub">Everyone who can sign in to the back office.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{% url 'accounts:user_create' %}">New admin user</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>Username</th><th>Email</th><th>Name</th><th>Access</th><th>Status</th><th>Last login</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td><strong>{{ u.username }}</strong></td>
+          <td>{{ u.email|default:"—" }}</td>
+          <td>{{ u.get_full_name|default:"—" }}</td>
+          <td>{% if u.is_superuser %}<span class="pill pill-gold">Full access</span>{% else %}<span class="pill pill-neutral">Standard</span>{% endif %}</td>
+          <td>{% if u.is_active %}<span class="pill pill-teal">Active</span>{% else %}<span class="pill pill-neutral">Disabled</span>{% endif %}</td>
+          <td class="muted">{{ u.last_login|date:"j M Y, H:i"|default:"Never" }}</td>
+          <td><div class="row-actions"><a class="btn btn-sm btn-ghost" href="{% url 'accounts:user_edit' u.pk %}">Edit</a></div></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="empty-row muted">No admin users yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

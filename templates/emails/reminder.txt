@@ -1,0 +1,17 @@
+Hi {{ booking.visitor_name }},
+
+A reminder about your meeting in about {{ hours_before }} hour{{ hours_before|pluralize }}.
+{% if is_online %}This is a video call.{% else %}This is an in-person meeting.{% endif %}
+
+  Event:     {{ event.name }}
+  Host:      {{ host.name }}
+  When:      {{ when }}
+  Duration:  {{ duration }}
+{% include "emails/_where_rows.txt" %}
+{% if not is_online %}Bring your confirmation email - show it at the venue to be checked in
+at {{ hall_name }}, {{ table_name }}.
+{% endif %}
+Can't make it? Move or cancel here:
+  {{ base_url }}{{ manage_url }}
+
+{{ company_name }} Connect

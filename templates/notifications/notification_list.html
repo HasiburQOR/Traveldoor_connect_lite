@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Notifications — TravelDoor Connect{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Notifications</h1>
+    <p class="sub">
+      {% if unread %}{{ unread }} unread{% else %}All caught up{% endif %} · pre-meeting alerts and attention flags.
+    </p>
+  </div>
+  {% if unread %}
+  <div class="actions">
+    <form method="post" action="{% url 'notifications:mark_all_read' %}"
+          hx-post="{% url 'notifications:mark_all_read' %}" hx-target="#notice-list" hx-swap="innerHTML">
+      {% csrf_token %}<button class="btn btn-secondary">Mark all read</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="notice-list" id="notice-list">
+    {% include "notifications/partials/notification_rows.html" %}
+  </div>
+</div>
+{% endblock %}

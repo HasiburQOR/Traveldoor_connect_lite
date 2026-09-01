@@ -1,0 +1,8 @@
+{% for n in notifications %}
+  {% include "notifications/partials/meeting_notice.html" with n=n %}
+{% empty %}
+  <div class="state-inline">
+    No notifications yet. Alerts appear here shortly before each meeting starts, and when a
+    booking needs rearranging.
+  </div>
+{% endfor %}

@@ -1,0 +1,91 @@
+{% extends "base_public.html" %}
+{% block title %}Book {{ host.name }} — {{ event.name }}{% endblock %}
+{% block content %}
+
+<a class="breadcrumb" href="{% url 'bookings_public:public_event' event.public_slug %}">&larr; All hosts</a>
+
+<div class="ticket">
+  {# Ticket header — who you are meeting. #}
+  <div class="ticket-head">
+    {% if host.photo_url %}
+      <img class="avatar" src="{{ host.photo_url }}" alt="">
+    {% else %}
+      <div class="avatar">{{ host.name|slice:":1"|upper }}</div>
+    {% endif %}
+    <div class="head-text">
+      <p class="host-name">{{ host.name }}</p>
+      <p class="host-meta">
+        {% if host.role %}{{ host.role }}<span class="dot"></span>{% endif %}{{ event.name }}
+        {% if slots %}<span class="dot"></span>{{ slots.0.duration_minutes }} min{% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="perforation"></div>
+
+  <div class="body-grid">
+    {# Left — pick a time, grouped by day. #}
+    <div class="schedule">
+      <p class="section-label">Pick a time</p>
+
+      {% regroup slots by date as day_groups %}
+      {% for day in day_groups %}
+        <div class="day-group">
+          <div class="day-rail">
+            <div class="day-dot"></div>
+            <div class="day-line"></div>
+          </div>
+          <div class="day-content">
+            <p class="day-title">{{ day.grouper|date:"l, j F" }}</p>
+            <div class="slot-grid">
+              {% for s in day.list %}
+                {% if s.is_publicly_bookable %}
+                  {# Plain href too, so the flow still works without htmx. #}
+                  <a class="slot{% if selected_slot and selected_slot.pk == s.pk %} selected{% endif %}"
+                     data-slot="{{ s.pk }}"
+                     href="{% url 'bookings_public:public_book' event.public_slug s.pk %}"
+                     hx-get="{% url 'bookings_public:public_book' event.public_slug s.pk %}"
+                     hx-target="#stub" hx-swap="innerHTML">{{ s.start_time|time:"g:i A" }}</a>
+                {% else %}
+                  <span class="slot taken" aria-disabled="true">{{ s.start_time|time:"g:i A" }}</span>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="state-inline">
+          <p style="margin:0 0 4px;">No open times right now.</p>
+          <p style="margin:0;">{{ host.name }} may add more — check back later, or pick another host.</p>
+        </div>
+      {% endfor %}
+    </div>
+
+    {# Right — the ticket stub: summary + your details. #}
+    <div class="stub" id="stub">
+      {% if stub_template %}
+        {# Server-rendered stub: the no-JS path, and a shareable booking URL. #}
+        {% include stub_template %}
+      {% else %}
+        <p class="stub-label">Your details</p>
+        <div class="stub-empty">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>
+          </svg>
+          <p style="margin:0;">Choose a time to book it.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  // Keep the picked time highlighted; htmx swaps only the stub.
+  document.addEventListener('click', function (e) {
+    var slot = e.target.closest('.slot[data-slot]');
+    if (!slot) return;
+    document.querySelectorAll('.slot.selected').forEach(function (s) { s.classList.remove('selected'); });
+    slot.classList.add('selected');
+  });
+</script>
+{% endblock %}

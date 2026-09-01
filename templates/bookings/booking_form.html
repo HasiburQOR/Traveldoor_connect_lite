@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — TravelDoor Connect{% endblock %}
+{% block content %}
+<a class="breadcrumb" href="{% if booking %}{% url 'bookings_admin:admin_detail' booking.pk %}{% else %}{% url 'bookings_admin:admin_list' %}{% endif %}">&larr; {% if booking %}{{ booking.visitor_name }}{% else %}Bookings{% endif %}</a>
+
+<div class="page-head">
+  <div>
+    <h1>{{ title }}</h1>
+    <p class="sub">The visitor receives the same confirmation email as a self-service booking.</p>
+  </div>
+</div>
+
+<div class="card card-narrow">
+  <form method="post">
+    {% csrf_token %}
+    {% include "partials/form_fields.html" with form=form %}
+
+    {% if events %}
+    <div class="field">
+      <label for="slot">Slot</label>
+      <select id="slot" name="slot" required>
+        <option value="">Choose an open slot…</option>
+        {% for e in events %}
+          <optgroup label="{{ e.name }}">
+            {% if request.GET.event == e.pk|stringformat:"s" and slots %}
+              {% for s in slots %}
+              <option value="{{ s.pk }}" {% if selected_slot and selected_slot.pk == s.pk %}selected{% endif %}>
+                {{ s.date|date:"j M" }} {{ s.start_time|time:"H:i" }} — {{ s.host.name }}</option>
+              {% endfor %}
+            {% endif %}
+          </optgroup>
+        {% endfor %}
+      </select>
+      <span class="helptext">Open an event and use “Book for a visitor” there to pre-load its slots.</span>
+    </div>
+    {% endif %}
+
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">Save booking</button>
+      <a class="btn btn-ghost" href="{% url 'bookings_admin:admin_list' %}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

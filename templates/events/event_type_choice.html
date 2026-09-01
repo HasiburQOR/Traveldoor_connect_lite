@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}New event — TravelDoor Connect{% endblock %}
+{% block content %}
+<a class="breadcrumb" href="{% url 'events:list' %}">&larr; Events</a>
+
+<div class="page-head">
+  <div>
+    <h1>What kind of event is this?</h1>
+    <p class="sub">
+      This decides what you fill in next and what visitors see. It cannot be changed once the
+      event has slots, so pick carefully.
+    </p>
+  </div>
+</div>
+
+<div class="roster" style="max-width:760px;">
+  <div class="host-card" style="text-align:left;align-items:stretch;">
+    <span class="pill pill-teal" style="align-self:flex-start;margin-bottom:14px;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 10l5-3v10l-5-3M4 6h9a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z"/></svg>
+      Video call
+    </span>
+    <h2 style="margin:0 0 6px;">Online event</h2>
+    <p class="muted" style="font-size:13px;margin:0 0 18px;">
+      Meetings happen over Google Meet or Zoom. You paste the meeting link; visitors get it by email.
+      No venue, hall or table details anywhere.
+    </p>
+    <a class="btn btn-secondary" style="margin-top:auto;" href="{% url 'events:create' %}?type=online">Set up an online event</a>
+  </div>
+
+  <div class="host-card" style="text-align:left;align-items:stretch;">
+    <span class="pill pill-neutral" style="align-self:flex-start;margin-bottom:14px;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      In person
+    </span>
+    <h2 style="margin:0 0 6px;">Offline event</h2>
+    <p class="muted" style="font-size:13px;margin:0 0 18px;">
+      Meetings happen at a venue. You set the venue, hall and table; visitors get the full address
+      and show their confirmation email on arrival. No meeting links anywhere.
+    </p>
+    <a class="btn btn-secondary" style="margin-top:auto;" href="{% url 'events:create' %}?type=offline">Set up an offline event</a>
+  </div>
+</div>
+{% endblock %}

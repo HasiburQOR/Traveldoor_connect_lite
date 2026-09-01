@@ -1,0 +1,68 @@
+<div class="card" id="team-section">
+  <div class="card-head">
+    <h2>Hosts</h2>
+    <button class="btn btn-sm btn-secondary" hx-get="{% url 'events:team_add' event.pk %}"
+            hx-target="#team-form" hx-swap="innerHTML show:#team-form:top">Add host</button>
+  </div>
+
+  {# An open (or rejected) form lives here, inside the swap target. #}
+  <div id="team-form">
+    {% if form %}{% include "events/partials/team_form.html" with form=form member=member %}{% endif %}
+  </div>
+
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>Host</th><th>Role</th><th>Email</th><th>Slots</th>
+          <th>{% if event.is_online %}Meeting link{% else %}Table{% endif %}</th>
+          <th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for m in members %}
+        <tr>
+          <td><strong>{{ m.name }}</strong>{% if m.linked_user %}<div class="muted">{{ m.linked_user.username }}</div>{% endif %}</td>
+          <td>{{ m.role|default:"—" }}</td>
+          <td>{{ m.email|default:"—" }}</td>
+          <td>{{ m.slots.all|length }}</td>
+          <td class="muted">
+            {# Only the fields this event's type actually uses. #}
+            {% with s=m.slots.all|first %}
+              {% if not s %}—
+              {% elif event.is_online %}
+                {% if s.effective_meeting_link %}<span class="pill pill-teal">Link set</span>{% else %}<span class="pill pill-gold">No link yet</span>{% endif %}
+              {% else %}
+                {{ s.effective_table|default:"—" }}{% if s.effective_hall %} · {{ s.effective_hall }}{% endif %}
+              {% endif %}
+            {% endwith %}
+          </td>
+          <td>{% if m.is_active %}<span class="pill pill-teal">Active</span>{% else %}<span class="pill pill-neutral">Removed</span>{% endif %}</td>
+          <td><div class="row-actions">
+            <button type="button" class="btn btn-sm btn-ghost" hx-get="{% url 'events:team_edit' event.pk m.pk %}"
+                    hx-target="#team-form" hx-swap="innerHTML show:#team-form:top">Edit</button>
+            {% if m.is_active %}
+              <form class="inline" method="post" action="{% url 'events:team_remove' event.pk m.pk %}"
+                    hx-post="{% url 'events:team_remove' event.pk m.pk %}" hx-target="#team-section" hx-swap="outerHTML"
+                    hx-confirm="Remove this host? Their live bookings will be flagged for you to rearrange.">
+                {% csrf_token %}<button class="btn btn-sm btn-danger">Remove</button>
+              </form>
+            {% else %}
+              <form class="inline" method="post" action="{% url 'events:team_reactivate' event.pk m.pk %}"
+                    hx-post="{% url 'events:team_reactivate' event.pk m.pk %}" hx-target="#team-section" hx-swap="outerHTML">
+                {% csrf_token %}<button class="btn btn-sm btn-secondary">Reactivate</button>
+              </form>
+              <form class="inline" method="post" action="{% url 'events:team_delete' event.pk m.pk %}"
+                    hx-post="{% url 'events:team_delete' event.pk m.pk %}" hx-target="#team-section" hx-swap="outerHTML"
+                    hx-confirm="Delete this host permanently?">
+                {% csrf_token %}<button class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            {% endif %}
+          </div></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="empty-row muted">No hosts yet — add one before creating slots.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>

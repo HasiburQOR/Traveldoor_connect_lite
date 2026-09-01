@@ -1,0 +1,21 @@
+{% comment %}
+One form field, rendered exactly like partials/form_fields.html renders each of
+its own. Use this when a page needs to place fields individually (the Settings
+screen groups them into sections).
+
+Usage: {% include "partials/field.html" with f=form.company_name %}
+{% endcomment %}
+{% if f.field.widget.input_type == "checkbox" %}
+  <div class="field field-check">
+    <label for="{{ f.id_for_label }}">{{ f }} {{ f.label }}</label>
+    {% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}
+    {{ f.errors }}
+  </div>
+{% else %}
+  <div class="field">
+    <label for="{{ f.id_for_label }}">{{ f.label }}</label>
+    {{ f }}
+    {% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}
+    {{ f.errors }}
+  </div>
+{% endif %}

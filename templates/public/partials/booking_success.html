@@ -1,0 +1,37 @@
+{% comment %}
+Post-submit confirmation, rendered into the ticket stub so the visitor stays
+inside the same ticket they just filled in.
+{% endcomment %}
+<p class="stub-label">Confirmed</p>
+
+<div class="stub-summary">
+  <p class="when">{{ booking.slot.date|date:"D, j M" }} &middot; {{ booking.slot.start_time|time:"g:i A" }}</p>
+  <p class="with">{{ booking.slot.duration_minutes }} min with {{ booking.slot.host.name }}</p>
+  {% if event.is_online %}
+    <span class="pill pill-teal"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 10l5-3v10l-5-3M4 6h9a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z"/></svg> {{ booking.slot.effective_provider_display|default:"Online meeting" }}</span>
+    {% if booking.slot.effective_meeting_link %}
+      <ul class="where-list">
+        <li><span class="k">Join</span><span class="v"><a href="{{ booking.slot.effective_meeting_link }}">{{ booking.slot.effective_meeting_link }}</a></span></li>
+      </ul>
+    {% endif %}
+  {% else %}
+    <span class="pill pill-neutral"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg> In person</span>
+    <ul class="where-list">
+      <li><span class="k">Venue</span><span class="v">{{ booking.slot.effective_venue }}</span></li>
+      <li><span class="k">Hall</span><span class="v">{{ booking.slot.effective_hall }}</span></li>
+      <li><span class="k">Table</span><span class="v">{{ booking.slot.effective_table }}</span></li>
+    </ul>
+  {% endif %}
+</div>
+
+<p style="font-size:13.5px;margin:0 0 6px;">You're booked, {{ booking.visitor_name }}.</p>
+<p style="font-size:13px;color:var(--slate-soft);margin:0 0 8px;">
+  We've emailed the details to <strong style="color:var(--navy);">{{ booking.visitor_email }}</strong>,
+  including a personal link for changing or cancelling this meeting.
+  {% if not event.is_online %}Please have that email with you at the venue — it's how we'll check you in.{% endif %}
+</p>
+
+<div class="actions">
+  <a class="btn btn-secondary" href="{% url 'bookings_manage:manage' booking.manage_token %}">Manage this booking</a>
+  <a class="btn btn-ghost" href="{% url 'bookings_public:public_event' event.public_slug %}">All hosts</a>
+</div>

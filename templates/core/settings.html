@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Settings — TravelDoor Connect{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Settings</h1>
+    <p class="sub">Branding and the mailbox every email is sent from. Changes take effect immediately — no redeploy.</p>
+  </div>
+  <div class="actions">
+    <form method="post" action="{% url 'core:test_email' %}" class="inline">
+      {% csrf_token %}<button class="btn btn-secondary">Send test email</button>
+    </form>
+  </div>
+</div>
+
+{# Current delivery state, so the effect of a change is visible straight away. #}
+<div class="card card-tight" style="border-left:3px solid {% if email_health.ok %}var(--teal){% else %}var(--gold){% endif %};">
+  <table class="kv">
+    <tr><th>Email delivery</th><td>
+      {% if email_health.sending %}
+        <span class="pill pill-teal">Sending</span>
+        <span class="muted">{{ email_health.backend }}</span>
+      {% else %}
+        <span class="pill pill-gold">Not sending</span>
+        <span class="muted">Emails are written to the server console. Fill in an SMTP server below to deliver them.</span>
+      {% endif %}
+    </td></tr>
+    <tr><th>Sent from</th><td>{{ email_health.from_email }}</td></tr>
+    <tr><th>Links point to</th><td>
+      {{ email_health.base_url }}
+      {% if email_health.base_url_is_local %}
+        <span class="pill pill-gold">Not reachable by visitors</span>
+      {% endif %}
+    </td></tr>
+    {% if email_health.failed %}
+      <tr><th>Failed sends</th><td><span class="pill pill-red">{{ email_health.failed }}</span>
+        <span class="muted">Open a booking to see the error.</span></td></tr>
+    {% endif %}
+    {% if site.updated_at and site.updated_by %}
+      <tr><th>Last changed</th><td class="muted">{{ site.updated_at|date:"j M Y, H:i" }} by {{ site.updated_by }}</td></tr>
+    {% endif %}
+  </table>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="card card-narrow">
+    <div class="card-head"><h2>Company</h2></div>
+    {% if form.non_field_errors %}
+      <ul class="errorlist nonfield">
+        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+    {% include "partials/field.html" with f=form.company_name %}
+    {% include "partials/field.html" with f=form.public_base_url %}
+  </div>
+
+  <div class="card card-narrow">
+    <div class="card-head"><h2>Outgoing email</h2></div>
+    <p class="helptext" style="margin:-8px 0 16px;">
+      Every confirmation, reminder and cancellation is sent from this mailbox.
+      Leave the server blank to keep using the environment configuration.
+    </p>
+
+    <div class="form-grid">
+      {% include "partials/field.html" with f=form.from_name %}
+      {% include "partials/field.html" with f=form.from_email %}
+    </div>
+
+    {% include "partials/field.html" with f=form.email_host %}
+
+    <div class="form-grid">
+      {% include "partials/field.html" with f=form.email_port %}
+      {% include "partials/field.html" with f=form.email_host_user %}
+    </div>
+
+    <div class="field">
+      <label for="{{ form.email_host_password.id_for_label }}">{{ form.email_host_password.label }}</label>
+      {{ form.email_host_password }}
+      <span class="helptext">
+        {% if site.has_email_password %}A password is saved (encrypted). {% endif %}
+        {{ form.email_host_password.help_text }}
+      </span>
+      {{ form.email_host_password.errors }}
+    </div>
+    {% if site.has_email_password %}
+      {% include "partials/field.html" with f=form.clear_email_password %}
+    {% endif %}
+
+    <div class="form-grid">
+      {% include "partials/field.html" with f=form.email_use_tls %}
+      {% include "partials/field.html" with f=form.email_use_ssl %}
+    </div>
+  </div>
+
+  <div class="card card-narrow">
+    <div class="card-head"><h2>Booking defaults</h2></div>
+    {% include "partials/field.html" with f=form.default_reminder_hours %}
+  </div>
+
+  <div class="actions">
+    <button type="submit" class="btn btn-primary">Save settings</button>
+    <a class="btn btn-ghost" href="{% url 'core:dashboard' %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

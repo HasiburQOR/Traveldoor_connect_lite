@@ -1,0 +1,37 @@
+{% comment %}
+Email shell. Email clients do not support CSS custom properties or external
+stylesheets, so the design tokens are inlined here as literal values — this
+file and its children are the only place that is allowed. The values are the
+same tokens as static/css/site.css:
+  navy #16324B · paper #F3F5F6 · card #FFFFFF · gold #C0872E · teal #2F7566
+  slate #3A4550 · slate-soft #6B7684 · line #DEE3E7
+{% endcomment %}<html lang="en">
+<body style="margin:0;background:#F3F5F6;font-family:Inter,'Segoe UI',system-ui,sans-serif;color:#3A4550;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3F5F6;">
+    <tr><td align="center" style="padding:32px 12px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0"
+             style="max-width:600px;width:100%;background:#FFFFFF;border-radius:16px;overflow:hidden;">
+
+        {# Ticket-style header block #}
+        <tr><td style="background:#16324B;color:#FFFFFF;padding:22px 28px;font-family:Georgia,'Times New Roman',serif;font-size:19px;font-weight:500;letter-spacing:0.01em;">
+          {{ company_name }} Connect
+        </td></tr>
+
+        {# Perforation — a dashed rule echoing the booking ticket #}
+        <tr><td style="padding:0 28px;">
+          <div style="border-top:2px dashed #DEE3E7;font-size:0;line-height:0;">&nbsp;</div>
+        </td></tr>
+
+        <tr><td style="padding:26px 28px;font-size:14px;line-height:1.55;color:#3A4550;">
+          {% block body %}{% endblock %}
+        </td></tr>
+
+        <tr><td style="background:#F3F5F6;color:#6B7684;font-size:12px;padding:16px 28px;line-height:1.5;">
+          Sent by {{ company_name }} Connect · &copy; {{ current_year }} {{ company_name }}.
+          {% block footer %}{% endblock %}
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

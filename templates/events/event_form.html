@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — TravelDoor Connect{% endblock %}
+{% block content %}
+<a class="breadcrumb" href="{% if event %}{% url 'events:detail' event.pk %}{% else %}{% url 'events:list' %}{% endif %}">&larr; {% if event %}{{ event.name }}{% else %}Events{% endif %}</a>
+
+<div class="page-head">
+  <div>
+    <h1>{{ title }}</h1>
+    <p class="sub">
+      {% if event_type == "online" %}Video-call event — meeting link and provider below; no venue details.
+      {% else %}In-person event — venue, hall and table below; no meeting links.{% endif %}
+    </p>
+  </div>
+</div>
+
+<div class="card card-narrow">
+  {# Event type: locked once slots exist, switchable before that. #}
+  {% if type_locked %}
+    <div class="note note-locked">
+      <strong>Event type is locked: {% if event_type == "online" %}Online (video call){% else %}Offline (in person){% endif %}.</strong><br>
+      This event already has {{ slot_count }} slot{{ slot_count|pluralize }}. Changing the type would
+      invalidate every slot's meeting details and the confirmations already sent to visitors.
+      To run this event the other way, create a new event instead.
+    </div>
+  {% else %}
+    <div class="note">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span>Event type:</span>
+        {% include "partials/type_pill.html" with event=form.instance %}
+        <a class="btn btn-sm btn-ghost" href="?type={% if event_type == 'online' %}offline{% else %}online{% endif %}">
+          Switch to {% if event_type == "online" %}in person{% else %}video call{% endif %}
+        </a>
+      </div>
+      <span class="helptext" style="margin-top:8px;">
+        You can still change this because the event has no slots yet. It locks as soon as the first slot is added.
+      </span>
+    </div>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="event_type" value="{{ event_type }}">
+    {% include "partials/form_fields.html" with form=form %}
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">Save event</button>
+      <a class="btn btn-ghost" href="{% if event %}{% url 'events:detail' event.pk %}{% else %}{% url 'events:list' %}{% endif %}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

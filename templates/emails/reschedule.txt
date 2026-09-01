@@ -1,0 +1,21 @@
+Hi {{ booking.visitor_name }},
+
+Your meeting has been MOVED. Updated details:
+{% if is_online %}Still a video call - use the link below at the new time.{% else %}Still an in-person meeting.{% endif %}
+
+  Event:     {{ event.name }}
+  Host:      {{ host.name }}
+  New time:  {{ when }}
+  Duration:  {{ duration }}
+{% include "emails/_where_rows.txt" %}
+{% if not is_online %}Bring this email with you - show it at the venue to be checked in
+at {{ hall_name }}, {{ table_name }}.
+{% endif %}
+Add to calendar:
+  Google Calendar: {{ google_calendar_url }}
+  Outlook:         {{ outlook_calendar_url }}
+
+Manage (move or cancel) anytime:
+  {{ base_url }}{{ manage_url }}
+
+{{ company_name }} Connect

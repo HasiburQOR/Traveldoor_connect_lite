@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — TravelDoor Connect{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Dashboard</h1>
+    <p class="sub">Where things stand right now.</p>
+  </div>
+</div>
+
+{# Delivery diagnostics: the two defaults that silently stop visitor email. #}
+{% if not email_health.sending or email_health.base_url_is_local or email_health.failed %}
+<div class="card card-tight" style="border-left:3px solid var(--gold);">
+  <div class="card-head" style="margin-bottom:10px;">
+    <h2 style="font-size:17px;">Email delivery needs attention</h2>
+    <div class="actions" style="margin-top:0;">
+      {% if user.is_superuser %}
+        <a class="btn btn-sm btn-secondary" href="{% url 'core:settings' %}">Open settings</a>
+      {% endif %}
+      <form method="post" action="{% url 'core:test_email' %}" class="inline">
+        {% csrf_token %}<button class="btn btn-sm btn-ghost">Send test email</button>
+      </form>
+    </div>
+  </div>
+  <ul style="margin:0;padding-left:18px;font-size:13.5px;color:var(--slate);">
+    {% if not email_health.sending %}
+      <li><strong>Emails are not being sent.</strong> They are printed to the server console
+        instead, so visitors never receive confirmations or reminders.
+        Fill in an SMTP server under <strong>Settings &rarr; Outgoing email</strong>,
+        or set <span class="mono">EMAIL_BACKEND=smtp</span> plus the
+        <span class="mono">EMAIL_*</span> environment values.</li>
+    {% endif %}
+    {% if email_health.base_url_is_local %}
+      <li><strong>Links in emails point at {{ email_health.base_url }}.</strong>
+        Visitors cannot open those. Set it under <strong>Settings &rarr; Company</strong>,
+        or via the <span class="mono">PUBLIC_BASE_URL</span> environment variable.</li>
+    {% endif %}
+    {% if email_health.failed %}
+      <li><strong>{{ email_health.failed }} email{{ email_health.failed|pluralize }} failed to send.</strong>
+        Open a booking to see the delivery error.</li>
+    {% endif %}
+  </ul>
+</div>
+{% endif %}
+
+{% if not heartbeat or not heartbeat.last_run_at %}
+<div class="card card-tight" style="border-left:3px solid var(--gold);">
+  <h2 style="font-size:17px;margin-bottom:6px;">Background jobs have never run</h2>
+  <p class="muted" style="margin:0;font-size:13.5px;">
+    Reminder emails and pre-meeting alerts are produced by the scheduler. Start it with
+    <span class="mono">python manage.py runscheduler</span> (it runs as its own service in Docker).
+  </p>
+</div>
+{% endif %}
+
+<div class="stat-row">
+  <div class="stat"><div class="n">{{ stats.live_events }}</div><div class="label">Live events of {{ stats.events }}</div></div>
+  <div class="stat"><div class="n">{{ stats.hosts }}</div><div class="label">Hosts</div></div>
+  <div class="stat"><div class="n">{{ stats.slots }}</div><div class="label">Slots</div></div>
+  <div class="stat"><div class="n">{{ stats.bookings }}</div><div class="label">Confirmed bookings</div></div>
+  <div class="stat{% if stats.flags %} is-alert{% endif %}"><div class="n">{{ stats.flags }}</div><div class="label">Need attention</div></div>
+  <div class="stat{% if stats.failed_emails %} is-alert{% endif %}"><div class="n">{{ stats.failed_emails }}</div><div class="label">Failed emails</div></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Next meetings</h2>
+    <a class="btn btn-sm btn-ghost" href="{% url 'bookings_admin:admin_list' %}">All bookings</a>
+  </div>
+  {% if upcoming %}
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>When</th><th>Visitor</th><th>Host</th><th>Event</th><th>Format</th></tr></thead>
+      <tbody>
+        {% for b in upcoming %}
+        <tr>
+          <td>{{ b.slot.date|date:"j M" }} · {{ b.slot.start_time|time:"H:i" }}</td>
+          <td><a href="{% url 'bookings_admin:admin_detail' b.pk %}">{{ b.visitor_name }}</a>
+              {% if b.needs_attention %}<span class="pill pill-gold">Attention</span>{% endif %}</td>
+          <td>{{ b.slot.host.name }}</td>
+          <td>{{ b.event.name }}</td>
+          <td>{% include "partials/type_pill.html" with event=b.event %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="state-inline">Nothing booked yet. Publish an event to start taking bookings.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Pre-meeting notifications</h2>
+    <a class="btn btn-sm btn-ghost" href="{% url 'notifications:list' %}">All notifications</a>
+  </div>
+  {% if notifications %}
+    <div class="notice-list">
+      {% for n in notifications|slice:":4" %}
+        {% include "notifications/partials/meeting_notice.html" with n=n compact=1 %}
+      {% endfor %}
+    </div>
+  {% else %}
+  <div class="state-inline">No pre-meeting alerts right now. They appear shortly before each meeting starts.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Recent activity</h2>
+    <a class="btn btn-sm btn-ghost" href="{% url 'audit:list' %}">Audit log</a>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>When</th><th>Admin</th><th>What happened</th></tr></thead>
+      <tbody>
+        {% for e in recent %}
+        <tr>
+          <td class="muted">{{ e.created_at|date:"j M, H:i" }}</td>
+          <td>{{ e.actor|default:"System" }}</td>
+          <td><span class="pill pill-neutral">{{ e.get_action_display }}</span> {{ e.details|truncatechars:90 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="empty-row muted">Nothing logged yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<p class="footer-note" style="text-align:left;">
+  {% if heartbeat.last_run_at %}
+    Background jobs last ran {{ heartbeat.last_run_at|timesince }} ago.
+  {% endif %}
+  {% if email_health.ok %}
+    Email is configured and sending.
+    <form method="post" action="{% url 'core:test_email' %}" class="inline">
+      {% csrf_token %}<button class="btn btn-sm btn-ghost">Send test email</button>
+    </form>
+  {% endif %}
+</p>
+{% endblock %}

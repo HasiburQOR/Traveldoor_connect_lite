@@ -1,0 +1,32 @@
+{% comment %}
+Ticket stub contents once a time is chosen: the live booking summary plus the
+visitor's details. Swapped into #stub by htmx.
+
+Online events show the "Video call" pill; offline events show Venue / Hall /
+Table in its place. There is no video-link reference on an offline event.
+{% endcomment %}
+<p class="stub-label">Your details</p>
+
+<div class="stub-summary">
+  <p class="when">{{ slot.date|date:"D, j M" }} &middot; {{ slot.start_time|time:"g:i A" }}</p>
+  <p class="with">{{ slot.duration_minutes }} min with {{ host.name }}</p>
+  {% if event.is_online %}
+    <span class="pill pill-teal"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 10l5-3v10l-5-3M4 6h9a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z"/></svg> {{ slot.effective_provider_display|default:"Online meeting" }}</span>
+  {% else %}
+    <span class="pill pill-neutral"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg> In person</span>
+    <ul class="where-list">
+      <li><span class="k">Venue</span><span class="v">{{ slot.effective_venue }}</span></li>
+      <li><span class="k">Hall</span><span class="v">{{ slot.effective_hall }}</span></li>
+      <li><span class="k">Table</span><span class="v">{{ slot.effective_table }}</span></li>
+    </ul>
+  {% endif %}
+</div>
+
+<form method="post"
+      action="{% url 'bookings_public:public_book' event.public_slug slot.pk %}"
+      hx-post="{% url 'bookings_public:public_book' event.public_slug slot.pk %}"
+      hx-target="#stub" hx-swap="innerHTML">
+  {% csrf_token %}
+  {% include "partials/form_fields.html" with form=form %}
+  <button type="submit" class="btn btn-primary btn-block">Confirm booking</button>
+</form>

@@ -1,0 +1,812 @@
+/* ==========================================================================
+   TravelDoor Connect — single design system for both sides of the product.
+
+   One stylesheet, one set of tokens. Admin and visitor screens share the
+   colours and type scale so the brand reads as one product, but they differ
+   deliberately in density and chrome:
+
+     Admin   — persistent nav, bordered tables, dense rows, gold used once
+               per screen at most.
+     Visitor — no chrome beyond a back link and the footer credit, generous
+               whitespace, the "ticket" motif (header block, perforated
+               divider, two-column body).
+
+   Never hardcode a hex value in a template. Add a token here instead.
+   ========================================================================== */
+
+:root{
+  --navy:#16324B;        /* primary text, headers, buttons, ticket-header bg */
+  --navy-light:#2A4A67;  /* hover states on navy elements */
+  --paper:#F3F5F6;       /* page background */
+  --card:#FFFFFF;        /* card/panel background */
+  --gold:#C0872E;        /* primary action accent — one accent CTA per screen */
+  --gold-light:#F3E3C7;  /* gold badge backgrounds */
+  --teal:#2F7566;        /* success / confirmed / online-meeting indicator */
+  --teal-light:#E1EFEC;
+  --slate:#3A4550;       /* body text */
+  --slate-soft:#6B7684;  /* secondary/muted text */
+  --line:#DEE3E7;        /* borders, dividers */
+
+  /* Derived — kept here so no template invents its own. */
+  --gold-dark:#A8761F;
+  --danger:#A33A3A;
+  --danger-light:#F6E4E4;
+  --danger-line:#E7C9C9;
+  --neutral-pill:#EBEEF0;
+  --teal-line:#C4DED7;
+  --gold-line:#E7D3AE;
+  --gold-ink:#7A5714;   /* readable text on --gold-light */
+
+  --shadow-card:0 1px 2px rgba(22,50,75,0.06), 0 8px 24px rgba(22,50,75,0.06);
+  --shadow-soft:0 1px 2px rgba(22,50,75,0.06);
+  --radius:16px;
+  --radius-sm:8px;
+  --radius-md:12px;
+
+  --font-display:'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-ui:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+*{box-sizing:border-box;}
+
+body{
+  margin:0;
+  background:var(--paper);
+  font-family:var(--font-ui);
+  font-size:14px;
+  line-height:1.5;
+  color:var(--slate);
+  -webkit-font-smoothing:antialiased;
+}
+
+a{color:var(--navy);}
+
+/* Display type — page titles, host names, event names, headline numbers only.
+   Body/UI text is never Fraunces. */
+h1,h2,h3,.display{
+  font-family:var(--font-display);
+  font-weight:500;
+  color:var(--navy);
+  margin:0 0 .5rem;
+}
+h1{font-size:28px; line-height:1.2;}
+h2{font-size:20px;}
+h3{font-size:17px;}
+
+.muted{color:var(--slate-soft);}
+.mono{font-family:Consolas,'SF Mono',Menlo,monospace; font-size:12.5px;}
+.inline{display:inline;}
+hr.sep{border:none; border-top:1px solid var(--line); margin:1.25rem 0;}
+
+/* ==========================================================================
+   Section labels — the small uppercase-ish eyebrow used above groups
+   ========================================================================== */
+.section-label{
+  font-size:12px;
+  letter-spacing:0.02em;
+  color:var(--slate-soft);
+  font-weight:500;
+  margin:0 0 14px;
+}
+
+/* ==========================================================================
+   Admin shell
+   ========================================================================== */
+.topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:1rem;
+  background:var(--navy);
+  color:#fff;
+  padding:0 24px;
+  height:56px;
+}
+.topbar .brand{
+  font-family:var(--font-display);
+  font-size:17px;
+  font-weight:600;
+  color:#fff;
+  text-decoration:none;
+  white-space:nowrap;
+}
+.topnav{
+  display:flex;
+  gap:4px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+.topnav a{
+  color:rgba(255,255,255,0.78);
+  text-decoration:none;
+  font-size:13.5px;
+  font-weight:500;
+  padding:6px 10px;
+  border-radius:var(--radius-sm);
+}
+.topnav a:hover{color:#fff; background:var(--navy-light);}
+.topnav a.is-active{color:#fff; background:var(--navy-light);}
+.topbar-right{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:13px;
+}
+.whoami{
+  color:rgba(255,255,255,0.7);
+  font-size:13px;
+  white-space:nowrap;
+}
+.whoami a{color:rgba(255,255,255,0.9);}
+
+.layout{
+  max-width:1180px;
+  margin:0 auto;
+  padding:28px 24px 64px;
+}
+
+/* Page header pattern — title left, actions right. Used on every admin page. */
+.page-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+  margin-bottom:20px;
+}
+.page-head h1{margin:0;}
+.page-head .sub{
+  font-size:13.5px;
+  color:var(--slate-soft);
+  margin:4px 0 0;
+}
+.page-head .actions{margin-top:0;}
+
+.breadcrumb{
+  font-size:13px;
+  color:var(--slate-soft);
+  text-decoration:none;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-bottom:16px;
+}
+.breadcrumb:hover{color:var(--navy);}
+
+/* ==========================================================================
+   Messages
+   ========================================================================== */
+.messages{max-width:1180px; margin:16px auto 0; padding:0 24px;}
+.message{
+  padding:11px 14px;
+  border-radius:var(--radius-sm);
+  margin-bottom:8px;
+  font-size:13.5px;
+  border:1px solid var(--line);
+  background:var(--card);
+  color:var(--slate);
+}
+.message.success{background:var(--teal-light); border-color:var(--teal-line); color:var(--teal);}
+.message.error,.message.warning{background:var(--danger-light); border-color:var(--danger-line); color:var(--danger);}
+.message.info,.message.debug{background:var(--gold-light); border-color:var(--gold-line); color:var(--gold-ink);}
+
+/* ==========================================================================
+   Cards & panels
+   ========================================================================== */
+.card{
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-card);
+  padding:24px 26px;
+  margin-bottom:20px;
+}
+.card > h2:first-child,.card > h3:first-child{margin-top:0;}
+.card-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:16px;
+}
+.card-head h2{margin:0;}
+.card-narrow{max-width:640px;}
+.card-tight{padding:18px 20px;}
+
+/* A quieter panel used inside cards (notices, locked-field explanations). */
+.note{
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:var(--radius-md);
+  padding:14px 16px;
+  font-size:13.5px;
+  color:var(--slate);
+  margin-bottom:18px;
+}
+.note strong{color:var(--navy);}
+.note.note-locked{background:var(--gold-light); border-color:var(--gold-line);}
+
+/* ==========================================================================
+   Tables — the admin list primitive. Dense bordered rows, never cards.
+   ========================================================================== */
+.table-wrap{overflow-x:auto;}
+table.grid{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13.5px;
+}
+table.grid th,table.grid td{
+  text-align:left;
+  padding:11px 12px;
+  border-bottom:1px solid var(--line);
+  vertical-align:top;
+}
+table.grid thead th,table.grid tr:first-child th{
+  color:var(--slate-soft);
+  font-weight:500;
+  font-size:12px;
+  letter-spacing:0.02em;
+  white-space:nowrap;
+  border-bottom:1px solid var(--line);
+}
+table.grid tbody tr:last-child td{border-bottom:none;}
+table.grid td strong{color:var(--navy); font-weight:600;}
+table.grid a{color:var(--navy); text-decoration:none; font-weight:500;}
+table.grid a:hover{text-decoration:underline;}
+table.grid .row-actions{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+table.grid tr.is-unread{background:var(--gold-light);}
+table.grid tr.is-break td{background:var(--paper); color:var(--slate-soft);}
+/* Day separator inside a long slot table. */
+table.grid tr.day-header td{
+  background:var(--paper);
+  padding-top:14px;
+  padding-bottom:8px;
+  font-size:13px;
+  color:var(--navy);
+}
+table.grid tr.day-header .muted{margin-left:8px; font-size:12px; font-weight:400;}
+
+/* Key/value table used on detail screens. */
+table.kv{width:100%; border-collapse:collapse; font-size:13.5px;}
+table.kv th{
+  text-align:left;
+  padding:9px 16px 9px 0;
+  color:var(--slate-soft);
+  font-weight:500;
+  white-space:nowrap;
+  width:170px;
+  vertical-align:top;
+  border-bottom:1px solid var(--line);
+}
+table.kv td{padding:9px 0; border-bottom:1px solid var(--line); vertical-align:top;}
+table.kv tr:last-child th,table.kv tr:last-child td{border-bottom:none;}
+
+.empty-row{color:var(--slate-soft); font-style:normal;}
+
+/* ==========================================================================
+   Status pills — one mapping, used identically on every screen.
+     teal        online / confirmed / live / success / sent / active
+     gold-light  pending / draft / needs attention
+     neutral     offline / in-person / closed / cancelled-slot / inactive
+     red         cancelled / error / failed
+   ========================================================================== */
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  font-weight:500;
+  padding:3px 10px;
+  border-radius:20px;
+  background:var(--neutral-pill);
+  color:var(--slate-soft);
+  white-space:nowrap;
+  vertical-align:middle;
+}
+.pill svg{flex-shrink:0;}
+.pill-teal,
+.pill.live,.pill.confirmed,.pill.available,.pill.sent,.pill.active,.pill.online{
+  background:var(--teal-light); color:var(--teal);
+}
+.pill-gold,
+.pill.draft,.pill.pending,.pill.flag,.pill.booked{
+  background:var(--gold-light); color:var(--gold-ink);
+}
+.pill-neutral,
+.pill.closed,.pill.offline,.pill.inactive,.pill.expired,.pill.break{
+  background:var(--neutral-pill); color:var(--slate-soft);
+}
+.pill-red,
+.pill.cancelled,.pill.failed,.pill.error{
+  background:var(--danger-light); color:var(--danger);
+}
+
+/* ==========================================================================
+   Buttons — at most ONE gold primary visible per screen.
+   ========================================================================== */
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  padding:9px 16px;
+  border:1px solid transparent;
+  border-radius:var(--radius-sm);
+  background:var(--navy);
+  color:#fff;
+  font-family:var(--font-ui);
+  font-size:13.5px;
+  font-weight:500;
+  line-height:1.2;
+  text-decoration:none;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.btn:hover{background:var(--navy-light);}
+.btn:focus-visible{outline:none; box-shadow:0 0 0 3px rgba(22,50,75,0.18);}
+.btn:disabled,.btn[disabled]{background:var(--line); color:var(--slate-soft); cursor:not-allowed;}
+
+/* The single accent action. */
+.btn-primary{background:var(--gold); border-color:var(--gold); color:#fff; font-weight:600;}
+.btn-primary:hover{background:var(--gold-dark); border-color:var(--gold-dark);}
+.btn-primary:disabled,.btn-primary[disabled]{background:var(--line); border-color:var(--line); color:var(--slate-soft);}
+
+/* Everything else. */
+.btn-secondary{background:transparent; color:var(--navy); border-color:var(--navy);}
+.btn-secondary:hover{background:var(--navy); color:#fff;}
+.btn-ghost{background:transparent; color:var(--slate-soft); border-color:var(--line);}
+.btn-ghost:hover{background:var(--paper); color:var(--navy); border-color:var(--line);}
+.btn-danger{background:transparent; color:var(--danger); border-color:var(--danger-line);}
+.btn-danger:hover{background:var(--danger-light); color:var(--danger);}
+.btn-sm{padding:5px 11px; font-size:12.5px;}
+.btn-block{width:100%;}
+
+.actions{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:18px;}
+.actions-end{justify-content:flex-end;}
+
+/* ==========================================================================
+   Forms — one input style everywhere, both sides of the app.
+   ========================================================================== */
+.field{margin-bottom:16px;}
+.field > label,
+form.stack label,
+.form-row label{
+  display:block;
+  font-size:13px;
+  font-weight:500;
+  color:var(--slate);
+  margin-bottom:5px;
+}
+input[type=text],input[type=email],input[type=url],input[type=password],
+input[type=number],input[type=date],input[type=time],input[type=search],
+select,textarea{
+  width:100%;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm);
+  font-size:14px;
+  font-family:var(--font-ui);
+  color:var(--navy);
+  background:var(--card);
+}
+textarea{line-height:1.5; resize:vertical;}
+input:focus,select:focus,textarea:focus{
+  outline:none;
+  border-color:var(--navy-light);
+  box-shadow:0 0 0 3px rgba(22,50,75,0.08);
+}
+input[type=checkbox],input[type=radio]{
+  width:auto;
+  accent-color:var(--navy);
+  margin-right:6px;
+}
+::placeholder{color:var(--slate-soft); opacity:1;}
+
+form.stack p{margin:0 0 16px;}
+form.stack p > label{
+  display:block;
+  font-size:13px;
+  font-weight:500;
+  color:var(--slate);
+  margin-bottom:5px;
+}
+/* Checkbox rows render label-after-input; keep them on one line. */
+form.stack p > input[type=checkbox] + label,
+form.stack label > input[type=checkbox]{display:inline;}
+
+.helptext,form.stack .help,.help{
+  display:block;
+  color:var(--slate-soft);
+  font-size:12px;
+  margin-top:5px;
+}
+.errorlist{
+  color:var(--danger);
+  font-size:12.5px;
+  margin:6px 0 0;
+  padding-left:16px;
+  list-style:disc;
+}
+.errorlist.nonfield{
+  list-style:none;
+  padding:10px 14px;
+  background:var(--danger-light);
+  border:1px solid var(--danger-line);
+  border-radius:var(--radius-sm);
+  margin-bottom:14px;
+}
+ul.radio-list{list-style:none; margin:0; padding:0;}
+ul.radio-list li{margin-bottom:6px;}
+ul.radio-list label{display:inline; font-weight:400;}
+
+/* Paired fields sit side by side so each pair reads as one decision. */
+.form-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:0 14px;
+}
+@media (max-width:560px){
+  .form-grid{grid-template-columns:1fr;}
+}
+
+/* Forms opened inline inside an admin section (slot, host, bulk generator). */
+.inline-form{
+  margin:4px 0 22px;
+  padding:20px 22px;
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:var(--radius-md);
+  max-width:640px;
+}
+.inline-form .note{background:var(--card);}
+.inline-form .note{font-size:13px;}
+
+/* List pagination — sits under a table, inside its card. */
+.pager{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-top:16px;
+  padding-top:14px;
+  border-top:1px solid var(--line);
+}
+.pager-count{margin:0; font-size:12.5px; color:var(--slate-soft);}
+.pager-links{display:flex; align-items:center; gap:8px;}
+.pager-position{font-size:12.5px; color:var(--slate-soft);}
+.pager-links [aria-disabled="true"]{opacity:0.45; cursor:not-allowed;}
+
+/* Inline filter bars above admin tables. */
+.filter-bar{
+  display:flex;
+  gap:12px;
+  align-items:flex-end;
+  flex-wrap:wrap;
+}
+.filter-bar .field{margin-bottom:0; min-width:150px;}
+.filter-bar .field-check{padding-bottom:9px;}
+.filter-bar .field-check label{font-weight:400; font-size:13px; margin:0;}
+
+/* ==========================================================================
+   Dashboard summary blocks
+   ========================================================================== */
+.stat-row{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:14px;
+  margin-bottom:20px;
+}
+.stat{
+  background:var(--card);
+  border-radius:var(--radius-md);
+  box-shadow:var(--shadow-card);
+  padding:16px 18px;
+}
+.stat .n{
+  font-family:var(--font-display);
+  font-size:30px;
+  font-weight:600;
+  line-height:1.1;
+  color:var(--navy);
+}
+.stat .label{color:var(--slate-soft); font-size:12.5px; margin-top:2px;}
+.stat.is-alert .n{color:var(--gold);}
+
+/* ==========================================================================
+   In-app pre-meeting notification component (admin side)
+   ========================================================================== */
+.notice-list{display:flex; flex-direction:column; gap:12px;}
+.meeting-notice{
+  border:1px solid var(--line);
+  border-radius:var(--radius-md);
+  padding:16px 18px;
+  background:var(--card);
+  display:flex;
+  gap:16px;
+  align-items:flex-start;
+  justify-content:space-between;
+  flex-wrap:wrap;
+}
+.meeting-notice.is-unread{border-color:var(--gold-line); background:var(--gold-light);}
+.meeting-notice .notice-body{flex:1 1 320px; min-width:0;}
+.meeting-notice .notice-title{
+  font-family:var(--font-display);
+  font-size:17px;
+  font-weight:500;
+  color:var(--navy);
+  margin:0 0 4px;
+}
+.meeting-notice .notice-meta{font-size:12.5px; color:var(--slate-soft); margin:0 0 8px;}
+.meeting-notice .notice-msg{font-size:13.5px; margin:0; white-space:pre-line;}
+.meeting-notice .notice-where{
+  margin-top:10px;
+  font-size:13px;
+  color:var(--slate);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.meeting-notice .notice-actions{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+
+/* ==========================================================================
+   Visitor side — shell
+   ========================================================================== */
+.public-wrap{
+  max-width:960px;
+  margin:0 auto;
+  padding:40px 24px 80px;
+}
+.public-wrap.is-narrow{max-width:680px;}
+.footer-note{
+  text-align:center;
+  font-size:12.5px;
+  color:var(--slate-soft);
+  margin-top:28px;
+}
+.footer-note a{color:var(--navy); text-decoration:none; font-weight:500;}
+
+/* The ticket — signature device of the visitor booking flow only.
+   Never used for admin data tables. */
+.ticket{
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-card);
+  overflow:hidden;
+}
+.ticket-head{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  padding:32px 36px 28px;
+}
+.ticket-head .head-text{min-width:0;}
+.avatar{
+  width:56px;
+  height:56px;
+  border-radius:50%;
+  background:var(--navy);
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:var(--font-display);
+  font-size:20px;
+  font-weight:500;
+  flex-shrink:0;
+  object-fit:cover;
+  overflow:hidden;
+}
+img.avatar{display:block;}
+.host-name{
+  font-family:var(--font-display);
+  font-size:28px;
+  font-weight:500;
+  color:var(--navy);
+  margin:0 0 4px;
+  line-height:1.15;
+}
+.host-meta{font-size:14px; color:var(--slate-soft); margin:0;}
+.host-meta .dot{
+  display:inline-block;
+  width:3px;
+  height:3px;
+  border-radius:50%;
+  background:var(--slate-soft);
+  margin:0 8px;
+  vertical-align:middle;
+}
+
+.perforation{
+  position:relative;
+  height:0;
+  border-top:2px dashed var(--line);
+  margin:0 36px;
+}
+.perforation::before,.perforation::after{
+  content:"";
+  position:absolute;
+  top:-11px;
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  background:var(--paper);
+}
+.perforation::before{left:-11px;}
+.perforation::after{right:-11px;}
+
+.body-grid{display:grid; grid-template-columns:1.35fr 1fr;}
+.body-single{display:block;}
+
+.schedule{
+  padding:32px 36px 36px;
+  border-right:1px solid var(--line);
+}
+
+/* Day-grouped slot list */
+.day-group{display:flex; gap:16px; margin-bottom:26px;}
+.day-group:last-child{margin-bottom:0;}
+.day-rail{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  width:14px;
+  flex-shrink:0;
+  padding-top:4px;
+}
+.day-dot{width:9px; height:9px; border-radius:50%; background:var(--navy); flex-shrink:0;}
+.day-line{flex:1; width:1px; background:var(--line); margin-top:6px;}
+.day-group:last-child .day-line{display:none;}
+.day-content{flex:1; min-width:0;}
+.day-title{font-size:15px; font-weight:500; color:var(--navy); margin:0 0 12px;}
+
+.slot-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+.slot{
+  display:block;
+  border:1px solid var(--line);
+  background:var(--card);
+  border-radius:var(--radius-sm);
+  padding:9px 6px;
+  font-family:var(--font-ui);
+  font-size:13.5px;
+  font-weight:500;
+  color:var(--navy);
+  text-align:center;
+  text-decoration:none;   /* slots are links so they work without htmx */
+  cursor:pointer;
+  width:100%;
+}
+.slot:focus-visible{outline:none; box-shadow:0 0 0 3px rgba(22,50,75,0.18);}
+.slot:hover{border-color:var(--navy-light); background:var(--paper);}
+.slot.selected{background:var(--navy); border-color:var(--navy); color:#fff;}
+.slot.taken{
+  color:var(--slate-soft);
+  background:var(--paper);
+  text-decoration:line-through;
+  cursor:not-allowed;
+}
+
+/* The stub — right-hand column carrying the summary and the booking form. */
+.stub{
+  padding:32px 36px 36px;
+  background:var(--paper);
+  display:flex;
+  flex-direction:column;
+}
+.stub-label{
+  font-size:12px;
+  letter-spacing:0.02em;
+  color:var(--slate-soft);
+  font-weight:500;
+  margin:0 0 6px;
+}
+.stub-empty{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  color:var(--slate-soft);
+  font-size:14px;
+  padding:20px 0;
+}
+.stub-empty svg{margin-bottom:12px; opacity:0.5;}
+.stub-summary{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--radius-md);
+  padding:18px;
+  margin-bottom:20px;
+}
+.stub-summary .when{
+  font-family:var(--font-display);
+  font-size:19px;
+  font-weight:500;
+  color:var(--navy);
+  margin:0 0 2px;
+}
+.stub-summary .with{font-size:13px; color:var(--slate-soft); margin:0 0 12px;}
+
+/* Where-details block: venue/hall/table for offline events. */
+.where-list{
+  list-style:none;
+  margin:12px 0 0;
+  padding:12px 0 0;
+  border-top:1px dashed var(--line);
+  font-size:13px;
+}
+.where-list li{display:flex; gap:10px; margin-bottom:6px;}
+.where-list li:last-child{margin-bottom:0;}
+.where-list .k{color:var(--slate-soft); width:74px; flex-shrink:0;}
+.where-list .v{color:var(--navy); font-weight:500; min-width:0; word-break:break-word;}
+
+/* Visitor host roster */
+.roster{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:16px;
+}
+.host-card{
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-card);
+  padding:26px 22px;
+  text-align:center;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+.host-card .avatar{width:72px; height:72px; font-size:24px; margin-bottom:14px;}
+.host-card .host-name{font-size:20px; margin-bottom:2px;}
+.host-card .host-role{font-size:13px; color:var(--slate-soft); margin:0 0 6px;}
+.host-card .host-open{font-size:12.5px; color:var(--slate-soft); margin:0 0 16px;}
+.host-card .btn{margin-top:auto;}
+
+/* Empty / error states live inside the card system, never bare on the page. */
+.state{
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-card);
+  padding:44px 32px;
+  text-align:center;
+}
+.state h1,.state h2{margin:0 0 8px;}
+.state p{color:var(--slate-soft); font-size:14px; margin:0 auto 4px; max-width:44ch;}
+.state .actions{justify-content:center;}
+.state-inline{
+  padding:28px 20px;
+  text-align:center;
+  color:var(--slate-soft);
+  font-size:13.5px;
+  background:var(--paper);
+  border-radius:var(--radius-md);
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+@media (max-width:820px){
+  .topbar{height:auto; padding:12px 16px; flex-wrap:wrap;}
+  .layout{padding:20px 16px 48px;}
+  .messages{padding:0 16px;}
+}
+@media (max-width:720px){
+  .body-grid{grid-template-columns:1fr;}
+  .schedule{border-right:none; border-bottom:1px solid var(--line);}
+  .public-wrap{padding:28px 16px 56px;}
+  .ticket-head{padding:26px 22px 22px; gap:14px;}
+  .perforation{margin:0 22px;}
+  .schedule,.stub{padding:26px 22px 28px;}
+  .host-name{font-size:24px;}
+  h1{font-size:24px;}
+}
+@media (max-width:420px){
+  .slot-grid{grid-template-columns:repeat(2,1fr);}
+}

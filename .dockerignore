@@ -1,0 +1,28 @@
+# Never bake secrets or machine-local state into the image.
+.env
+.env.*
+!.env.example
+*.sqlite3
+*.sqlite3-*
+
+# Build outputs and caches.
+staticfiles/
+**/__pycache__/
+*.py[cod]
+
+# VCS, editors, local tooling.
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+
+# Docker files themselves (not needed inside the image).
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.dokploy.yml
+
+# Local smoke-test artifacts.
+smoke_*.txt
+view_tb.txt

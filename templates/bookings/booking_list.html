@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Bookings — TravelDoor Connect{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Bookings</h1>
+    <p class="sub">
+      {% if only_attention %}Showing only bookings that need rearranging.
+      {% else %}Every booking across all events.{% endif %}
+    </p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="{% url 'bookings_admin:admin_export' %}?{{ qs }}">Export CSV</a>
+    <a class="btn btn-primary" href="{% url 'bookings_admin:admin_create' %}">Book for a visitor</a>
+  </div>
+</div>
+
+<div class="card card-tight">
+  <form method="get" class="filter-bar">
+    <div class="field">
+      <label for="q">Search</label>
+      <input id="q" type="search" name="q" value="{{ q }}" placeholder="Name, email or company">
+    </div>
+    <div class="field">
+      <label for="status">Status</label>
+      <select id="status" name="status">
+        <option value="">Any status</option>
+        {% for val, label in statuses %}<option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="event">Event</label>
+      <select id="event" name="event">
+        <option value="">All events</option>
+        {% for e in events %}<option value="{{ e.pk }}" {% if event == e.pk|stringformat:"s" %}selected{% endif %}>{{ e.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field field-check">
+      <label for="attention"><input id="attention" type="checkbox" name="attention" value="1" {% if only_attention %}checked{% endif %}> Needs attention only</label>
+    </div>
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    <a class="btn btn-ghost" href="{% url 'bookings_admin:admin_list' %}">Reset</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>When</th><th>Visitor</th><th>Company</th><th>Host</th><th>Event</th><th>Format</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for b in bookings %}
+          {% include "bookings/partials/booking_rows.html" with b=b %}
+        {% empty %}
+        <tr><td colspan="8" class="empty-row muted">No bookings match. Try clearing the filters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/pagination.html" with page=page qs=qs label="bookings" %}
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base_public.html" %}
+{% block title %}{{ event.name }} — book a meeting{% endblock %}
+{% block content %}
+
+<div style="margin-bottom:26px;">
+  <h1 style="margin-bottom:6px;">{{ event.name }}</h1>
+  <p class="host-meta" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span>
+      {{ event.start_date|date:"j M Y" }}{% if event.duration_days > 1 %} – {{ event.end_date|date:"j M Y" }}{% endif %}
+      {% if event.is_offline and event.venue %}<span class="dot"></span>{{ event.venue }}{% endif %}
+    </span>
+    {% include "partials/type_pill.html" with event=event %}
+  </p>
+  {% if event.description %}
+    <p style="max-width:60ch;margin:14px 0 0;">{{ event.description|linebreaksbr }}</p>
+  {% endif %}
+</div>
+
+<p class="section-label">Choose who you'd like to meet</p>
+
+{% if hosts %}
+<div class="roster">
+  {% for host in hosts %}
+  <div class="host-card">
+    {% if host.photo_url %}
+      <img class="avatar" src="{{ host.photo_url }}" alt="">
+    {% else %}
+      <div class="avatar">{{ host.name|slice:":1"|upper }}</div>
+    {% endif %}
+    <p class="host-name">{{ host.name }}</p>
+    {% if host.role %}<p class="host-role">{{ host.role }}</p>{% endif %}
+    <p class="host-open">
+      {% with open=host.slots.all|length %}{% if open %}Open times available{% else %}No times listed yet{% endif %}{% endwith %}
+    </p>
+    <a class="btn btn-secondary" href="{% url 'bookings_public:public_host' event.public_slug host.pk %}">View open times</a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="state">
+  <h2>No hosts listed yet</h2>
+  <p>The team for this event is still being set up. Check back shortly — bookings open as soon as hosts are added.</p>
+</div>
+{% endif %}
+{% endblock %}

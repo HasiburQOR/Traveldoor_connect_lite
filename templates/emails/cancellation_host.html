@@ -1,0 +1,15 @@
+{% extends "emails/base_email.html" %}
+{% block body %}
+  <h2 style="margin:0 0 4px;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:500;color:#16324B;">A meeting was cancelled</h2>
+  <p style="margin:0 0 18px;color:#6B7684;font-size:13px;">The time is open again and can be booked by someone else.</p>
+
+  <p style="margin:0 0 14px;">Hi {{ host.name }},</p>
+
+  <table role="presentation" cellpadding="0" cellspacing="0" style="font-size:14px;width:100%;">
+    <tr><td style="color:#6B7684;padding:5px 14px 5px 0;vertical-align:top;">Visitor</td><td style="padding:5px 0;"><strong style="color:#16324B;">{{ booking.visitor_name }}</strong> ({{ booking.visitor_email }}){% if booking.company %} &mdash; {{ booking.company }}{% endif %}</td></tr>
+    <tr><td style="color:#6B7684;padding:5px 14px 5px 0;vertical-align:top;">Event</td><td style="padding:5px 0;">{{ event.name }}</td></tr>
+    <tr><td style="color:#6B7684;padding:5px 14px 5px 0;vertical-align:top;">Was set for</td><td style="padding:5px 0;">{{ when }}</td></tr>
+    <tr><td style="color:#6B7684;padding:5px 14px 5px 0;vertical-align:top;">Format</td><td style="padding:5px 0;">{% if is_online %}Video call{% else %}In person{% if table_name %} &middot; {{ hall_name }}, {{ table_name }}{% endif %}{% endif %}</td></tr>
+    <tr><td style="color:#6B7684;padding:5px 14px 5px 0;vertical-align:top;">Reason</td><td style="padding:5px 0;">{{ reason|default:"Visitor cancelled." }}</td></tr>
+  </table>
+{% endblock %}

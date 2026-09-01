@@ -1,0 +1,28 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Book a meeting — TravelDoor Connect{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/site.css' %}">
+  <script src="{% static 'js/htmx.min.js' %}" defer></script>
+</head>
+<body class="public">
+{% comment %}Visitor side: no navigation chrome beyond the back link each page
+supplies and the footer credit below.{% endcomment %}
+<main class="public-wrap{% block wrap_class %}{% endblock %}">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="message {{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+  {% block content %}{% endblock %}
+
+  <p class="footer-note">Powered by <a href="/">TravelDoor Connect</a></p>
+</main>
+</body>
+</html>

@@ -1,0 +1,72 @@
+{% extends "base_public.html" %}
+{% block title %}Your booking — {{ booking.event.name }}{% endblock %}
+{% block wrap_class %} is-narrow{% endblock %}
+{% block content %}
+
+<div class="ticket">
+  <div class="ticket-head">
+    {% if booking.slot.host.photo_url %}
+      <img class="avatar" src="{{ booking.slot.host.photo_url }}" alt="">
+    {% else %}
+      <div class="avatar">{{ booking.slot.host.name|slice:":1"|upper|default:"?" }}</div>
+    {% endif %}
+    <div class="head-text">
+      <p class="host-name">{{ booking.event.name }}</p>
+      <p class="host-meta">
+        {% if booking.slot %}{{ booking.slot.host.name }}<span class="dot"></span>{{ booking.slot.duration_minutes }} min{% else %}Meeting time to be confirmed{% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="perforation"></div>
+
+  <div class="stub" style="background:var(--card);">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <span class="pill {{ booking.status }}">{{ booking.get_status_display }}</span>
+      {% include "partials/type_pill.html" with event=booking.event %}
+      {% if booking.needs_attention %}<span class="pill pill-gold">Needs rearranging</span>{% endif %}
+    </div>
+
+    {% if booking.slot %}
+    <div class="stub-summary">
+      <p class="when">{{ booking.slot.date|date:"D, j M Y" }} &middot; {{ booking.slot.start_time|time:"g:i A" }}</p>
+      <p class="with">{{ booking.slot.duration_minutes }} min with {{ booking.slot.host.name }}</p>
+      {% include "partials/where_details.html" with slot=booking.slot event=booking.event show_link=booking.is_active %}
+    </div>
+    {% else %}
+    <div class="state-inline" style="margin-bottom:20px;">
+      This meeting's time was removed. The organiser will be in touch to arrange a new one.
+    </div>
+    {% endif %}
+
+    <table class="kv" style="margin-bottom:6px;">
+      <tr><th>Booked for</th><td>{{ booking.visitor_name }}</td></tr>
+      <tr><th>Email</th><td>{{ booking.visitor_email }}</td></tr>
+      {% if booking.company %}<tr><th>Company</th><td>{{ booking.company }}</td></tr>{% endif %}
+    </table>
+
+    {% if booking.is_active %}
+      {% if not booking.event.is_online %}
+        <p class="helptext" style="margin:14px 0 0;">Please bring this page or your confirmation email with you — we use it to check you in at the venue.</p>
+      {% endif %}
+      <div class="actions">
+        <a class="btn btn-primary" href="{% url 'bookings_manage:manage_reschedule' booking.manage_token %}">Change my time</a>
+        <form method="post" action="{% url 'bookings_manage:manage_cancel' booking.manage_token %}" class="inline"
+              onsubmit="return confirm('Cancel this booking? Your time will be released to someone else.');">
+          {% csrf_token %}<button type="submit" class="btn btn-danger">Cancel booking</button>
+        </form>
+      </div>
+    {% else %}
+      <p class="helptext" style="margin:14px 0 0;">
+        This booking was cancelled on {{ booking.cancelled_at|date:"j M Y" }}.
+        {% if booking.event.is_publicly_open %}You're welcome to book a new time from the event page.{% endif %}
+      </p>
+      {% if booking.event.is_publicly_open and booking.event.public_slug %}
+      <div class="actions">
+        <a class="btn btn-secondary" href="{% url 'bookings_public:public_event' booking.event.public_slug %}">Book another time</a>
+      </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

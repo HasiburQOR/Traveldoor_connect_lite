@@ -1,0 +1,22 @@
+{# One booking row — swapped in place by htmx after admin actions. #}
+<tr>
+  <td>{% if b.slot %}{{ b.slot.date|date:"j M" }} · {{ b.slot.start_time|time:"H:i" }}{% else %}—{% endif %}</td>
+  <td>
+    <a href="{% url 'bookings_admin:admin_detail' b.pk %}"><strong>{{ b.visitor_name }}</strong></a>
+    <div class="muted">{{ b.visitor_email }}</div>
+    {% if b.needs_attention %}<span class="pill pill-gold">Needs attention</span>{% endif %}
+  </td>
+  <td>{{ b.company|default:"—" }}</td>
+  <td>{% if b.slot %}{{ b.slot.host.name }}{% else %}—{% endif %}</td>
+  <td>{{ b.event.name }}</td>
+  <td>{% include "partials/type_pill.html" with event=b.event %}</td>
+  <td><span class="pill {{ b.status }}">{{ b.get_status_display }}</span></td>
+  <td><div class="row-actions">
+    <a class="btn btn-sm btn-ghost" href="{% url 'bookings_admin:admin_detail' b.pk %}">Open</a>
+    {% if b.needs_attention %}
+      <form class="inline" method="post" action="{% url 'bookings_admin:admin_clear_flag' b.pk %}"
+            hx-post="{% url 'bookings_admin:admin_clear_flag' b.pk %}" hx-target="closest tr" hx-swap="outerHTML">
+        {% csrf_token %}<button class="btn btn-sm btn-secondary">Clear flag</button></form>
+    {% endif %}
+  </div></td>
+</tr>

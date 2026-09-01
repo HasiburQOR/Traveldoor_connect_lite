@@ -1,0 +1,12 @@
+Hello {{ user.first_name|default:user.username }},
+
+Your admin account for {{ company_name }} Connect has been created.
+
+  Login page: {{ base_url }}{{ login_path }}
+  Username:   {{ user.username }}
+  Password:   {{ raw_password }}
+
+Please log in and change your password immediately (Account → Change password).
+This one-time password was generated for you — do not reply to this email.
+
+{{ company_name }} Connect

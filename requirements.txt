@@ -1,0 +1,8 @@
+# TravelDoor Connect - Python 3.12. htmx is vendored in static/js/ and
+# static/css/site.css is plain CSS (no frontend build step).
+Django>=6.1,<7
+gunicorn>=23.0,<24        # production WSGI server (Docker / Dokploy)
+whitenoise>=6.9,<7        # static file serving in production (no nginx needed)
+apscheduler>=3.10,<4     # background reminder/retry loop (runscheduler)
+psycopg[binary]>=3.2,<4   # PostgreSQL driver (production database)
+cryptography>=42,<50      # encrypts the SMTP password stored in Settings

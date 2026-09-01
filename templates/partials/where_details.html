@@ -1,0 +1,22 @@
+{% comment %}
+Where-details for one slot, branched on the event type.
+
+Online  → provider label only (the join link is emailed, never shown publicly
+          before the booking exists).
+Offline → venue, hall and table.
+
+Usage: {% include "partials/where_details.html" with slot=slot event=event %}
+Set `show_link=True` to include the join link (post-booking screens only).
+{% endcomment %}
+<ul class="where-list">
+  {% if event.is_online %}
+    <li><span class="k">Format</span><span class="v">{{ slot.effective_provider_display|default:"Video call" }}</span></li>
+    {% if show_link and slot.effective_meeting_link %}
+      <li><span class="k">Join</span><span class="v"><a href="{{ slot.effective_meeting_link }}">{{ slot.effective_meeting_link }}</a></span></li>
+    {% endif %}
+  {% else %}
+    <li><span class="k">Venue</span><span class="v">{{ slot.effective_venue|default:"—" }}</span></li>
+    <li><span class="k">Hall</span><span class="v">{{ slot.effective_hall|default:"—" }}</span></li>
+    <li><span class="k">Table</span><span class="v">{{ slot.effective_table|default:"—" }}</span></li>
+  {% endif %}
+</ul>

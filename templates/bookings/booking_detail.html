@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ booking.visitor_name }} — TravelDoor Connect{% endblock %}
+{% block content %}
+<a class="breadcrumb" href="{% url 'bookings_admin:admin_list' %}">&larr; Bookings</a>
+
+<div class="page-head">
+  <div>
+    <h1>{{ booking.visitor_name }}</h1>
+    <p class="sub" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span class="pill {{ booking.status }}">{{ booking.get_status_display }}</span>
+      {% include "partials/type_pill.html" with event=booking.event %}
+      {% if booking.needs_attention %}<span class="pill pill-gold">Needs attention</span>{% endif %}
+      <span>{{ booking.event.name }}</span>
+    </p>
+  </div>
+  <div class="actions">
+    {% if booking.is_active %}
+      <a class="btn btn-secondary" href="{% url 'bookings_admin:admin_reschedule' booking.pk %}">Reschedule</a>
+    {% endif %}
+    <a class="btn btn-ghost" href="{% url 'bookings_admin:admin_update' booking.pk %}">Edit details</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Meeting</h2></div>
+  <table class="kv">
+    <tr><th>Event</th><td>{{ booking.event.name }}</td></tr>
+    {% if booking.slot %}
+      <tr><th>When</th><td>{{ booking.slot.date|date:"l, j F Y" }} at {{ booking.slot.start_time|time:"H:i" }}
+        <span class="muted">({{ booking.slot.duration_minutes }} min)</span></td></tr>
+      <tr><th>Host</th><td><strong>{{ booking.slot.host.name }}</strong>{% if booking.slot.host.role %} — {{ booking.slot.host.role }}{% endif %}</td></tr>
+      {% if booking.event.is_online %}
+        <tr><th>Format</th><td>Video call{% if booking.slot.effective_provider_display %} · {{ booking.slot.effective_provider_display }}{% endif %}</td></tr>
+        <tr><th>Join link</th><td>{% if booking.slot.effective_meeting_link %}<a class="mono" href="{{ booking.slot.effective_meeting_link }}">{{ booking.slot.effective_meeting_link }}</a>{% else %}<span class="muted">Not set</span>{% endif %}</td></tr>
+      {% else %}
+        <tr><th>Format</th><td>In person</td></tr>
+        <tr><th>Venue</th><td>{{ booking.slot.effective_venue|default:"—" }}</td></tr>
+        <tr><th>Hall</th><td>{{ booking.slot.effective_hall|default:"—" }}</td></tr>
+        <tr><th>Table</th><td>{{ booking.slot.effective_table|default:"—" }}</td></tr>
+      {% endif %}
+    {% else %}
+      <tr><th>When</th><td class="muted">Slot removed — the visitor needs a new time.</td></tr>
+    {% endif %}
+    <tr><th>Booked</th><td class="muted">{{ booking.created_at|date:"j M Y, H:i" }}</td></tr>
+    {% if booking.cancelled_at %}<tr><th>Cancelled</th><td class="muted">{{ booking.cancelled_at|date:"j M Y, H:i" }}</td></tr>{% endif %}
+    <tr><th>Visitor link</th><td><a class="mono" href="{% url 'bookings_manage:manage' booking.manage_token %}">{% url 'bookings_manage:manage' booking.manage_token %}</a></td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Visitor</h2></div>
+  <table class="kv">
+    <tr><th>Name</th><td>{{ booking.visitor_name }}</td></tr>
+    <tr><th>Email</th><td>{{ booking.visitor_email }}</td></tr>
+    <tr><th>Phone</th><td>{{ booking.visitor_phone|default:"—" }}</td></tr>
+    <tr><th>Company</th><td>{{ booking.company|default:"—" }}</td></tr>
+    <tr><th>Notes</th><td>{{ booking.notes|default:"—" }}</td></tr>
+  </table>
+</div>
+
+{% if booking.is_active %}
+<div class="card">
+  <div class="card-head"><h2>Cancel this booking</h2></div>
+  <p class="muted" style="margin:-8px 0 16px;font-size:13px;">
+    The slot reopens immediately and both the visitor and the host are emailed. This cannot be undone.
+  </p>
+  <form method="post" action="{% url 'bookings_admin:admin_cancel' booking.pk %}" style="max-width:520px;"
+        onsubmit="return confirm('Cancel this booking? Both parties will be emailed.');">
+    {% csrf_token %}
+    <div class="field">
+      <label for="reason">Reason (included in both emails)</label>
+      <input id="reason" type="text" name="reason" value="Cancelled by organiser.">
+    </div>
+    <div class="actions"><button type="submit" class="btn btn-danger">Cancel booking</button></div>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head"><h2>History</h2></div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead>
+      <tbody>
+        {% for e in trail %}
+        <tr><td class="muted">{{ e.created_at|date:"j M Y, H:i" }}</td>
+            <td>{{ e.actor|default:"Visitor / system" }}</td>
+            <td><span class="pill pill-neutral">{{ e.get_action_display }}</span></td>
+            <td>{{ e.details }}</td></tr>
+        {% empty %}
+        <tr><td colspan="4" class="empty-row muted">Nothing recorded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Reminders</h2>
+    <form method="post" action="{% url 'bookings_admin:admin_resend' booking.pk %}" class="inline">
+      {% csrf_token %}<button class="btn btn-sm btn-secondary">Re-send confirmation</button>
+    </form>
+  </div>
+  {% if reminders %}
+    <table class="kv">
+      {% for r in reminders %}
+      <tr>
+        <th>{{ r.hours }}h before</th>
+        <td>
+          {% if r.state == "sent" %}
+            <span class="pill pill-teal">Sent</span> <span class="muted">{{ r.at|date:"j M Y, H:i" }}</span>
+          {% elif r.state == "scheduled" %}
+            <span class="pill pill-neutral">Scheduled</span> <span class="muted">due {{ r.at|date:"j M Y, H:i" }}</span>
+          {% elif r.state == "overdue" %}
+            <span class="pill pill-gold">Not sent</span>
+            <span class="muted">was due {{ r.at|date:"j M Y, H:i" }} — is the scheduler running?</span>
+          {% else %}
+            <span class="pill pill-neutral">Skipped</span> <span class="muted">booking is not active</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <div class="state-inline">No reminders configured for this event.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Emails sent</h2></div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>When</th><th>Type</th><th>To</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for n in emails %}
+        <tr><td class="muted">{{ n.created_at|date:"j M Y, H:i" }}</td>
+            <td>{{ n.get_type_display }}</td>
+            <td>{{ n.recipient_email }}</td>
+            <td><span class="pill {{ n.status }}">{{ n.get_status_display }}</span></td></tr>
+        {% empty %}
+        <tr><td colspan="4" class="empty-row muted">No emails logged for this booking.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Delete {{ event.name }}? — TravelDoor Connect{% endblock %}
+{% block content %}
+<a class="breadcrumb" href="{% url 'events:detail' event.pk %}">&larr; {{ event.name }}</a>
+
+<div class="page-head"><div><h1>Delete this event?</h1></div></div>
+
+<div class="card card-narrow">
+  {% if affected %}
+  <div class="note" style="background:var(--danger-light);border-color:var(--danger-line);">
+    <strong>{{ affected|length }} confirmed booking{{ affected|length|pluralize }} will be cancelled.</strong>
+    Each visitor gets a cancellation email. This cannot be undone.
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>Visitor</th><th>Email</th><th>When</th></tr></thead>
+      <tbody>
+        {% for b in affected %}
+        <tr><td><strong>{{ b.visitor_name }}</strong></td><td>{{ b.visitor_email }}</td>
+            <td>{{ b.slot.date|date:"j M" }} · {{ b.slot.start_time|time:"H:i" }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">This event has no confirmed bookings, so nobody will be emailed.</p>
+  {% endif %}
+
+  <form method="post" action="{% url 'events:delete' event.pk %}">
+    {% csrf_token %}
+    <div class="actions">
+      <button type="submit" class="btn btn-danger">Yes, delete {{ event.name }}</button>
+      <a class="btn btn-secondary" href="{% url 'events:detail' event.pk %}">Keep this event</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

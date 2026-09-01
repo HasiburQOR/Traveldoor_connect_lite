@@ -1,0 +1,34 @@
+{% comment %}
+The "where" rows of a meeting-details table, branched on event type.
+
+Online  → provider + join link, and a note that it is a video call.
+Offline → full address (venue, hall, table) and the check-in note.
+
+Context keys come from notifications.emails._meeting_context, so no email
+template ever reaches into the slot and risks showing the wrong type's fields.
+{% endcomment %}
+{% if is_online %}
+  <tr>
+    <td style="color:#6B7684;padding:5px 14px 5px 0;vertical-align:top;">Where</td>
+    <td style="padding:5px 0;">Video call{% if provider %} &middot; {{ provider }}{% endif %}</td>
+  </tr>
+  {% if join_link %}
+  <tr>
+    <td style="color:#6B7684;padding:5px 14px 5px 0;vertical-align:top;">Join link</td>
+    <td style="padding:5px 0;word-break:break-all;"><a href="{{ join_link }}" style="color:#16324B;">{{ join_link }}</a></td>
+  </tr>
+  {% endif %}
+{% else %}
+  <tr>
+    <td style="color:#6B7684;padding:5px 14px 5px 0;vertical-align:top;">Venue</td>
+    <td style="padding:5px 0;">{{ venue }}</td>
+  </tr>
+  <tr>
+    <td style="color:#6B7684;padding:5px 14px 5px 0;vertical-align:top;">Hall</td>
+    <td style="padding:5px 0;">{{ hall_name }}</td>
+  </tr>
+  <tr>
+    <td style="color:#6B7684;padding:5px 14px 5px 0;vertical-align:top;">Table</td>
+    <td style="padding:5px 0;">{{ table_name }}</td>
+  </tr>
+{% endif %}

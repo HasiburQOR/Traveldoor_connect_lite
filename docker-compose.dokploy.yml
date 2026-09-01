@@ -1,0 +1,50 @@
+# TravelDoor Connect - Dokploy deployment (web + scheduler only).
+#
+# The database is provided by Dokploy: create a PostgreSQL database in your
+# project and attach it to this app (that injects DATABASE_URL), or point
+# DATABASE_URL at any external server. This compose file ships only the app.
+#
+# Set these in the Dokploy UI (Environment) - they are interpolated here at
+# deploy time via ${VAR:-default}:
+#
+#   DJANGO_SECRET_KEY     random string, e.g. `openssl rand -base64 32`  (!!)
+#   DJANGO_DEBUG          false (default below)
+#   DJANGO_ALLOWED_HOSTS  bookings.example.com        (your domain!)
+#   PUBLIC_BASE_URL       https://bookings.example.com  (used in email links)
+#   EMAIL_BACKEND         smtp (+ EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER,
+#                         EMAIL_HOST_PASSWORD) - see .env.example
+#
+# Attach your domain to the `web` service, port 8000. Migrations, static
+# collection and the reminder scheduler all run automatically on boot.
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000"
+    environment:
+      DATABASE_URL: "${DATABASE_URL:-}"
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-django-insecure-dev-only-key-change-me-in-production-0123456789}"
+      DJANGO_DEBUG: "${DJANGO_DEBUG:-false}"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,testserver}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://127.0.0.1:8000}"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "${DJANGO_CSRF_TRUSTED_ORIGINS:-}"
+    restart: unless-stopped
+
+  scheduler:
+    build: .
+    command: ["scheduler"]
+    # The image HEALTHCHECK probes HTTP; the scheduler runs the reminder loop
+    # instead, so disable it (the container exiting is the failure signal).
+    healthcheck:
+      disable: true
+    environment:
+      DATABASE_URL: "${DATABASE_URL:-}"
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-django-insecure-dev-only-key-change-me-in-production-0123456789}"
+      DJANGO_DEBUG: "${DJANGO_DEBUG:-false}"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,testserver}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://127.0.0.1:8000}"
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped

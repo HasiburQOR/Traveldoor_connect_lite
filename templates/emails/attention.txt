@@ -1,0 +1,16 @@
+Hi {{ booking.visitor_name }},
+
+We need to rearrange your meeting for "{{ event.name }}". Your booking is
+still held while we find you a new host.
+
+  Host:        {{ host.name }}
+  Was set for: {{ when }}
+  Format:      {% if is_online %}Video call{% else %}In person{% if venue %} - {{ venue }}{% endif %}{% endif %}
+  Reason:      {{ reason|default:"Your host is no longer available." }}
+
+We will be in touch shortly with an alternative. If you would rather not
+wait, you can cancel from your booking page:
+  {{ base_url }}{{ manage_url }}
+
+Thank you for your patience.
+{{ company_name }} Connect

@@ -1,0 +1,169 @@
+{% comment %}
+Bulk slot generator. Paired fields sit side by side so the date window and the
+day window each read as one decision, and a live counter shows what the current
+settings would actually create before the admin commits to them.
+{% endcomment %}
+<form method="post" action="{% url 'events:slot_bulk' event.pk %}"
+      hx-post="{% url 'events:slot_bulk' event.pk %}" hx-target="#slot-section" hx-swap="outerHTML"
+      class="inline-form" id="bulk-slot-form" data-hosts="{{ host_count|default:0 }}">
+  {% csrf_token %}
+  <h3 style="margin:0 0 4px;">Bulk-generate slots</h3>
+  <p class="helptext" style="margin:0 0 16px;">
+    Fills the window with back-to-back slots for every active host. Slots that already
+    exist are left alone, so it is safe to run again after adding a host.
+    New slots inherit this event's {% if event.is_online %}video-call details{% else %}venue details{% endif %}.
+  </p>
+
+  {% if not host_count %}
+    <div class="note note-locked" style="margin-bottom:0;">
+      <strong>Add a host first.</strong>
+      Slots belong to a host, so there is nothing to generate until this event has at
+      least one active host.
+    </div>
+    <div class="actions" style="margin-top:14px;">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('form').remove()">Close</button>
+    </div>
+  {% else %}
+    {% if form.non_field_errors %}
+      <ul class="errorlist nonfield">
+        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.date_from.id_for_label }}">{{ form.date_from.label }}</label>
+        {{ form.date_from }}
+        {{ form.date_from.errors }}
+      </div>
+      <div class="field">
+        <label for="{{ form.date_to.id_for_label }}">{{ form.date_to.label }}</label>
+        {{ form.date_to }}
+        {{ form.date_to.errors }}
+      </div>
+    </div>
+    {% if form.date_from.help_text %}<span class="helptext" style="margin:-8px 0 16px;">{{ form.date_from.help_text }}</span>{% endif %}
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.start_time.id_for_label }}">{{ form.start_time.label }}</label>
+        {{ form.start_time }}
+        {{ form.start_time.errors }}
+      </div>
+      <div class="field">
+        <label for="{{ form.end_time.id_for_label }}">{{ form.end_time.label }}</label>
+        {{ form.end_time }}
+        <span class="helptext">{{ form.end_time.help_text }}</span>
+        {{ form.end_time.errors }}
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.duration_minutes.id_for_label }}">{{ form.duration_minutes.label }}</label>
+        {{ form.duration_minutes }}
+        <span class="helptext">{{ form.duration_minutes.help_text }}</span>
+        {{ form.duration_minutes.errors }}
+      </div>
+      <div class="field">
+        <label for="{{ form.capacity.id_for_label }}">{{ form.capacity.label }}</label>
+        {{ form.capacity }}
+        <span class="helptext">{{ form.capacity.help_text }}</span>
+        {{ form.capacity.errors }}
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.gap_minutes.id_for_label }}">{{ form.gap_minutes.label }}</label>
+        {{ form.gap_minutes }}
+        <span class="helptext">{{ form.gap_minutes.help_text }}</span>
+        {{ form.gap_minutes.errors }}
+      </div>
+      <div class="field"></div>
+    </div>
+
+    <p class="section-label" style="margin:6px 0 10px;">Break</p>
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.break_start.id_for_label }}">{{ form.break_start.label }}</label>
+        {{ form.break_start }}
+        <span class="helptext">{{ form.break_start.help_text }}</span>
+        {{ form.break_start.errors }}
+      </div>
+      <div class="field">
+        <label for="{{ form.break_end.id_for_label }}">{{ form.break_end.label }}</label>
+        {{ form.break_end }}
+        {{ form.break_end.errors }}
+      </div>
+    </div>
+    <div class="field field-check">
+      <label for="{{ form.mark_break.id_for_label }}">{{ form.mark_break }} {{ form.mark_break.label }}</label>
+      <span class="helptext">{{ form.mark_break.help_text }}</span>
+      {{ form.mark_break.errors }}
+    </div>
+
+    {# Live preview — tells the admin what they are about to create. #}
+    <p class="note" id="bulk-preview" style="margin-bottom:0;" aria-live="polite"></p>
+
+    <div class="actions">
+      <button type="submit" class="btn btn-secondary">Generate slots</button>
+      <button type="button" class="btn btn-ghost" onclick="this.closest('form').remove()">Cancel</button>
+    </div>
+  {% endif %}
+</form>
+
+<script>
+(function () {
+  var form = document.getElementById('bulk-slot-form');
+  if (!form) return;
+  var out = form.querySelector('#bulk-preview');
+  if (!out) return;
+  var hosts = parseInt(form.dataset.hosts, 10) || 0;
+  var f = function (name) { return form.querySelector('[name="' + name + '"]'); };
+
+  function minutes(value) {
+    var parts = (value || '').split(':');
+    if (parts.length < 2) return null;
+    return (parseInt(parts[0], 10) * 60) + parseInt(parts[1], 10);
+  }
+
+  function update() {
+    var from = f('date_from').value, to = f('date_to').value;
+    var start = minutes(f('start_time').value), end = minutes(f('end_time').value);
+    var each = parseInt(f('duration_minutes').value, 10);
+    if (!from || !to || start === null || end === null || !each) {
+      out.textContent = 'Fill in the window to see how many slots this creates.';
+      return;
+    }
+    var days = Math.floor((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
+    if (days < 1) { out.textContent = 'The last day is before the first day.'; return; }
+    if (end <= start) { out.textContent = 'The day has to end after it starts.'; return; }
+    var gap = parseInt(f('gap_minutes').value, 10) || 0;
+    var bStart = minutes(f('break_start').value), bEnd = minutes(f('break_end').value);
+    var hasBreak = bStart !== null && bEnd !== null && bEnd > bStart;
+
+    // Walk the day exactly the way the server does, so the count matches.
+    var perDay = 0, t = start;
+    while (t + each <= end) {
+      if (hasBreak && t < bEnd && t + each > bStart) { t = bEnd; continue; }
+      perDay++; t += each + gap;
+    }
+    if (perDay < 1) { out.textContent = 'No slots fit — the window is too short for that slot length.'; return; }
+    var total = perDay * days * hosts;
+    var text = 'Creates about ' + total + ' slot' + (total === 1 ? '' : 's') +
+      ' — ' + perDay + ' per day × ' + days + ' day' + (days === 1 ? '' : 's') +
+      ' × ' + hosts + ' host' + (hosts === 1 ? '' : 's') + '.';
+    if (hasBreak) {
+      text += ' Break ' + f('break_start').value + '–' + f('break_end').value + ' kept clear';
+      if (f('mark_break').checked) { text += ' and shown in the schedule'; }
+      text += '.';
+    }
+    out.textContent = text + ' Existing slots are skipped.';
+  }
+
+  form.addEventListener('input', update);
+  form.addEventListener('change', update);
+  update();
+})();
+</script>

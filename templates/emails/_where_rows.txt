@@ -1,0 +1,6 @@
+{% if is_online %}  Where:     Video call{% if provider %} ({{ provider }}){% endif %}
+  Join link: {{ join_link }}
+{% else %}  Venue:     {{ venue }}
+  Hall:      {{ hall_name }}
+  Table:     {{ table_name }}
+{% endif %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Events — TravelDoor Connect{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Events</h1>
+    <p class="sub">Each event is either a video-call event or an in-person one, set when you create it.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{% url 'events:create' %}">New event</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>Event</th><th>Type</th><th>Dates</th><th>Status</th><th>Public link</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for event in events %}
+        <tr>
+          <td>
+            <a href="{% url 'events:detail' event.pk %}"><strong>{{ event.name }}</strong></a>
+            {% if event.is_expired %} <span class="pill pill-neutral">Expired</span>{% endif %}
+            {# Enough detail to tell two events apart without opening them. #}
+            <div class="muted" style="font-size:12.5px;margin-top:2px;">
+              {{ event.host_count }} host{{ event.host_count|pluralize }} ·
+              {{ event.slot_count }} slot{{ event.slot_count|pluralize }} ·
+              {{ event.booking_count }} booked
+              {% if event.is_online %}
+                {% if event.default_video_provider %} · {{ event.get_default_video_provider_display }}{% endif %}
+              {% elif event.venue %} · {{ event.venue }}{% if event.hall_name %}, {{ event.hall_name }}{% endif %}
+              {% endif %}
+            </div>
+          </td>
+          <td>{% include "partials/type_pill.html" with event=event %}</td>
+          <td>{{ event.start_date|date:"j M Y" }}{% if event.duration_days > 1 %} → {{ event.end_date|date:"j M Y" }}{% endif %}</td>
+          <td><span class="pill {{ event.status }}">{{ event.get_status_display }}</span></td>
+          <td>
+            {% if event.public_slug %}
+              <a href="{% url 'bookings_public:public_event' event.public_slug %}" class="mono">/b/{{ event.public_slug }}/</a>
+            {% else %}<span class="muted">Not published</span>{% endif %}
+          </td>
+          <td><div class="row-actions">
+            <a class="btn btn-sm btn-secondary" href="{% url 'events:detail' event.pk %}">Open</a>
+            <a class="btn btn-sm btn-ghost" href="{% url 'events:update' event.pk %}">Edit</a>
+            <form class="inline" method="post" action="{% url 'events:clone' event.pk %}">
+              {% csrf_token %}<button class="btn btn-sm btn-ghost">Duplicate</button>
+            </form>
+            <a class="btn btn-sm btn-danger" href="{% url 'events:delete_confirm' event.pk %}">Delete</a>
+          </div></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="empty-row muted">No events yet — create your first one to get started.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

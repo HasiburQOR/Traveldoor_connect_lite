@@ -1,0 +1,51 @@
+{% comment %}
+In-app pre-meeting notification component. Two variants, driven by the event
+type of the meeting it refers to:
+
+  online  → a clickable button that opens the meeting link directly
+  offline → venue / hall / table details, and no link anywhere
+
+Usage: {% include "notifications/partials/meeting_notice.html" with n=n %}
+Pass compact=1 to hide the mark-read control (dashboard preview).
+{% endcomment %}
+<div class="meeting-notice{% if not n.is_read %} is-unread{% endif %}">
+  <div class="notice-body">
+    <p class="notice-title">{{ n.title }}</p>
+    <p class="notice-meta">
+      {{ n.host.name }} · {{ n.event.name }} · {{ n.meeting_datetime|date:"j M, H:i" }}
+      {% include "partials/type_pill.html" with event=n.event %}
+    </p>
+    {% if n.message %}<p class="notice-msg">{{ n.message }}</p>{% endif %}
+
+    {% if n.event.is_online %}
+      {% if n.join_url %}
+        <div class="notice-where">
+          {# Secondary, not gold: this repeats per row, and only one gold
+             action may be visible on a screen at a time. #}
+          <a class="btn btn-sm btn-secondary" href="{{ n.join_url }}" target="_blank" rel="noopener">Join the video call</a>
+        </div>
+      {% endif %}
+    {% else %}
+      {% if n.venue_details %}
+        <div class="notice-where">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span>{{ n.venue_details }}</span>
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  {% if not compact %}
+  <div class="notice-actions">
+    {% if n.booking %}
+      <a class="btn btn-sm btn-ghost" href="{% url 'bookings_admin:admin_detail' n.booking.pk %}">Open booking</a>
+    {% endif %}
+    {% if not n.is_read %}
+      <form method="post" action="{% url 'notifications:mark_read' n.pk %}"
+            hx-post="{% url 'notifications:mark_read' n.pk %}" hx-target="#notice-list" hx-swap="innerHTML">
+        {% csrf_token %}<button class="btn btn-sm btn-ghost">Mark read</button>
+      </form>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>

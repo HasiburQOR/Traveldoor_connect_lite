@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — TravelDoor Connect{% endblock %}
+{% block content %}
+<a class="breadcrumb" href="{% url 'accounts:user_list' %}">&larr; Admin users</a>
+
+<div class="page-head"><div><h1>{{ title }}</h1></div></div>
+
+<div class="card card-narrow">
+  <div class="note">
+    New admins are emailed their username and a one-time password. Ask them to change it
+    at first login from <strong>their name in the top bar</strong>.
+  </div>
+  <form method="post">
+    {% csrf_token %}
+    {% include "partials/form_fields.html" with form=form %}
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">Save account</button>
+      <a class="btn btn-ghost" href="{% url 'accounts:user_list' %}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

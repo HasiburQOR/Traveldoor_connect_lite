@@ -1,0 +1,10 @@
+{% comment %}
+Event-type indicator. One mapping, used on every screen that shows an event or
+a booking: teal "Video call" for online, neutral grey "In person" for offline.
+Usage: {% include "partials/type_pill.html" with event=event %}
+{% endcomment %}
+{% if event.is_online %}
+<span class="pill pill-teal"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 10l5-3v10l-5-3M4 6h9a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z"/></svg>Video call</span>
+{% else %}
+<span class="pill pill-neutral"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>In person</span>
+{% endif %}

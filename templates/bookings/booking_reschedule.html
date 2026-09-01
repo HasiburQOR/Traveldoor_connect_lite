@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Reschedule {{ booking.visitor_name }} — TravelDoor Connect{% endblock %}
+{% block content %}
+<a class="breadcrumb" href="{% url 'bookings_admin:admin_detail' booking.pk %}">&larr; {{ booking.visitor_name }}</a>
+
+<div class="page-head">
+  <div>
+    <h1>Reschedule this booking</h1>
+    <p class="sub">
+      Currently {% if booking.slot %}{{ booking.slot.date|date:"j M" }} at {{ booking.slot.start_time|time:"H:i" }} with {{ booking.slot.host.name }}{% else %}no slot held{% endif %}.
+      The visitor is emailed the new details automatically.
+    </p>
+  </div>
+</div>
+
+<div class="card card-narrow">
+  <form method="post">
+    {% csrf_token %}
+    {% if options %}
+      <div class="field">
+        <label for="slot">Move to</label>
+        <select id="slot" name="slot" required>
+          <option value="">Choose a new slot…</option>
+          {% for s in options %}
+          <option value="{{ s.pk }}">{{ s.date|date:"j M" }} · {{ s.start_time|time:"H:i" }} — {{ s.host.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Move booking</button>
+        <a class="btn btn-ghost" href="{% url 'bookings_admin:admin_detail' booking.pk %}">Cancel</a>
+      </div>
+    {% else %}
+      <div class="state-inline">
+        No other slots are open on this event. Add or reopen a slot first, then come back.
+      </div>
+      <div class="actions">
+        <a class="btn btn-secondary" href="{% url 'events:detail' booking.event.pk %}">Manage slots</a>
+        <a class="btn btn-ghost" href="{% url 'bookings_admin:admin_detail' booking.pk %}">Back</a>
+      </div>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

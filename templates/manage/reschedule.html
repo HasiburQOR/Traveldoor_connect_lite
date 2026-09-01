@@ -1,0 +1,50 @@
+{% extends "base_public.html" %}
+{% block title %}Change your meeting time{% endblock %}
+{% block wrap_class %} is-narrow{% endblock %}
+{% block content %}
+
+<a class="breadcrumb" href="{% url 'bookings_manage:manage' booking.manage_token %}">&larr; Back to my booking</a>
+
+<div class="ticket">
+  <div class="ticket-head">
+    <div class="head-text">
+      <p class="host-name">Change your time</p>
+      <p class="host-meta">
+        {% if booking.slot %}Currently {{ booking.slot.date|date:"D, j M" }} at {{ booking.slot.start_time|time:"g:i A" }} with {{ booking.slot.host.name }}{% else %}No time currently held{% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="perforation"></div>
+
+  <div class="stub" style="background:var(--card);">
+    <form method="post">
+      {% csrf_token %}
+      {% if options %}
+        <div class="field">
+          <label for="slot">Pick a new time</label>
+          <select id="slot" name="slot" required>
+            <option value="">Choose a time…</option>
+            {% for s in options %}
+              <option value="{{ s.pk }}">{{ s.date|date:"D, j M" }} · {{ s.start_time|time:"g:i A" }} — {{ s.host.name }}</option>
+            {% endfor %}
+          </select>
+          <span class="helptext">Your current time is released as soon as the new one is confirmed.</span>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn btn-primary">Move my meeting</button>
+          <a class="btn btn-ghost" href="{% url 'bookings_manage:manage' booking.manage_token %}">Keep my time</a>
+        </div>
+      {% else %}
+        <div class="state-inline">
+          <p style="margin:0 0 4px;">No other times are open right now.</p>
+          <p style="margin:0;">Your existing booking is unchanged — check back later, or cancel it from your booking page.</p>
+        </div>
+        <div class="actions">
+          <a class="btn btn-secondary" href="{% url 'bookings_manage:manage' booking.manage_token %}">Back to my booking</a>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endblock %}

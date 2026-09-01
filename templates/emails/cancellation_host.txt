@@ -1,0 +1,13 @@
+Hi {{ host.name }},
+
+A meeting in your schedule has been cancelled.
+
+  Visitor:     {{ booking.visitor_name }} ({{ booking.visitor_email }}){% if booking.company %} - {{ booking.company }}{% endif %}
+  Event:       {{ event.name }}
+  Was set for: {{ when }}
+  Format:      {% if is_online %}Video call{% else %}In person{% if table_name %} - {{ hall_name }}, {{ table_name }}{% endif %}{% endif %}
+  Reason:      {{ reason|default:"Visitor cancelled." }}
+
+The time is open again and can be booked by someone else.
+
+{{ company_name }} Connect

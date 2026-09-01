@@ -1,0 +1,27 @@
+{% comment %}
+The one field renderer used by EVERY form in the app — admin and visitor.
+Keeps label/input/help/error styling identical everywhere.
+
+Usage: {% include "partials/form_fields.html" with form=form %}
+{% endcomment %}
+{% if form.non_field_errors %}
+  <ul class="errorlist nonfield">
+    {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+  </ul>
+{% endif %}
+{% for f in form %}
+  {% if f.field.widget.input_type == "checkbox" %}
+    <div class="field field-check">
+      <label for="{{ f.id_for_label }}">{{ f }} {{ f.label }}</label>
+      {% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}
+      {{ f.errors }}
+    </div>
+  {% else %}
+    <div class="field">
+      <label for="{{ f.id_for_label }}">{{ f.label }}</label>
+      {{ f }}
+      {% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}
+      {{ f.errors }}
+    </div>
+  {% endif %}
+{% endfor %}

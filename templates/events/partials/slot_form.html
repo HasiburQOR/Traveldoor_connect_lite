@@ -1,0 +1,16 @@
+<form method="post"
+      action="{% if slot %}{% url 'events:slot_edit' event.pk slot.pk %}{% else %}{% url 'events:slot_add' event.pk %}{% endif %}"
+      hx-post="{% if slot %}{% url 'events:slot_edit' event.pk slot.pk %}{% else %}{% url 'events:slot_add' event.pk %}{% endif %}"
+      hx-target="#slot-section" hx-swap="outerHTML" class="inline-form">
+  {% csrf_token %}
+  <h3 style="margin:0 0 4px;">{% if slot %}Edit slot — {{ slot.date|date:"j M" }}, {{ slot.start_time|time:"H:i" }} with {{ slot.host.name }}{% else %}New slot{% endif %}</h3>
+  <p class="helptext" style="margin:0 0 14px;">
+    {% if event.is_online %}Video call — this event has no venue fields.
+    {% else %}In person — this event has no meeting-link fields.{% endif %}
+  </p>
+  {% include "partials/form_fields.html" with form=form %}
+  <div class="actions" style="margin-top:6px;">
+    <button type="submit" class="btn btn-secondary">Save slot</button>
+    <button type="button" class="btn btn-ghost" onclick="this.closest('form').remove()">Cancel</button>
+  </div>
+</form>

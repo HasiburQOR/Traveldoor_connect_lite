@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Audit log — TravelDoor Connect{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Audit log</h1>
+    <p class="sub">Every change made in the back office. Read-only — entries cannot be edited or removed.</p>
+  </div>
+</div>
+
+<div class="card card-tight">
+  <form method="get" class="filter-bar">
+    <div class="field"><label for="from">From</label><input id="from" type="date" name="from" value="{{ filters.from }}"></div>
+    <div class="field"><label for="to">To</label><input id="to" type="date" name="to" value="{{ filters.to }}"></div>
+    <div class="field"><label for="actor">Admin</label>
+      <select id="actor" name="actor">
+        <option value="">Anyone</option>
+        {% for id, username in actors %}<option value="{{ id }}" {% if filters.actor == id|stringformat:"s" %}selected{% endif %}>{{ username }}</option>{% endfor %}
+      </select></div>
+    <div class="field"><label for="entity">Entity</label>
+      <select id="entity" name="entity">
+        <option value="">Anything</option>
+        {% for val, label in entity_types %}<option value="{{ val }}" {% if filters.entity == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <div class="field"><label for="action">Action</label>
+      <select id="action" name="action">
+        <option value="">Any action</option>
+        {% for val, label in actions %}<option value="{{ val }}" {% if filters.action == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    <a class="btn btn-ghost" href="{% url 'audit:list' %}">Reset</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td class="muted">{{ e.created_at|date:"j M Y, H:i" }}</td>
+          <td>{{ e.actor|default:"Visitor / system" }}</td>
+          <td><span class="pill pill-neutral">{{ e.get_action_display }}</span></td>
+          <td>{{ e.entity_type }}</td>
+          <td>{{ e.details }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty-row muted">No entries match these filters. Try widening the date range.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/pagination.html" with page=page qs=qs label="entries" %}
+</div>
+{% endblock %}

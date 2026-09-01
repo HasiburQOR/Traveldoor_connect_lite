@@ -1,0 +1,30 @@
+{% comment %}
+Pagination for admin lists.
+
+Usage: {% include "partials/pagination.html" with page=page qs=qs label="bookings" %}
+  page  — a Django Page object (see core.pagination.paginate)
+  qs    — querystring minus `page`, already ending in "&" (or empty)
+  label — plural noun for the count line, e.g. "bookings"
+{% endcomment %}
+{% if page.paginator.count %}
+<div class="pager">
+  <p class="pager-count">
+    {{ page.start_index }}–{{ page.end_index }} of {{ page.paginator.count }} {{ label }}
+  </p>
+  {% if page.paginator.num_pages > 1 %}
+  <nav class="pager-links" aria-label="Pagination">
+    {% if page.has_previous %}
+      <a class="btn btn-sm btn-ghost" href="?{{ qs }}page={{ page.previous_page_number }}">Previous</a>
+    {% else %}
+      <span class="btn btn-sm btn-ghost" aria-disabled="true">Previous</span>
+    {% endif %}
+    <span class="pager-position">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}
+      <a class="btn btn-sm btn-ghost" href="?{{ qs }}page={{ page.next_page_number }}">Next</a>
+    {% else %}
+      <span class="btn btn-sm btn-ghost" aria-disabled="true">Next</span>
+    {% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endif %}
