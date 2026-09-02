@@ -53,6 +53,12 @@ ALLOWED_HOSTS = [
     for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
     if h.strip()
 ]
+# The container HEALTHCHECK (and compose `depends_on: service_healthy`) probes
+# http://127.0.0.1:<port>/health/ directly, so loopback must always be allowed
+# even when DJANGO_ALLOWED_HOSTS is overridden for deployment (Dokploy etc.).
+for _loopback in ("127.0.0.1", "localhost"):
+    if _loopback not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_loopback)
 
 # Absolute origin used to build links inside emails (FR-5.1 manage links etc.).
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")

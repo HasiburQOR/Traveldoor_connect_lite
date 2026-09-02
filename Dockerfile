@@ -31,9 +31,12 @@ USER appuser
 
 EXPOSE 8000
 
-# Liveness probe - hits the /health/ endpoint (NFR-1).
+# Liveness probe - hits the /health/ endpoint (NFR-1). Sends
+# X-Forwarded-Proto: https so the probe is seen as an already-terminated-TLS
+# request and is exempt from the production SECURE_SSL_REDIRECT (gunicorn
+# itself speaks plain HTTP; TLS terminates at the reverse proxy).
 HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=5 \
-    CMD python -c "import os,sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8000') + '/health/', timeout=4).getcode() == 200 else 1)"
+    CMD python -c "import os,sys,urllib.request; req=urllib.request.Request('http://127.0.0.1:' + os.environ.get('PORT', '8000') + '/health/', headers={'X-Forwarded-Proto': 'https'}); sys.exit(0 if urllib.request.urlopen(req, timeout=4).getcode() == 200 else 1)"
 
 ENTRYPOINT ["python", "docker/entrypoint.py"]
 CMD ["web"]

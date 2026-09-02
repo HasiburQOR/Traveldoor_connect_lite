@@ -49,9 +49,18 @@ Example below uses `booking.binomargroup.com`.
    Email SMTP is intentionally left out: configure it after first login on
    the Settings screen so the password is encrypted at rest and survives
    redeploys (database config always wins over environment).
+
+   How Dokploy applies these: the compose **Environment** editor writes them
+   to a `.env` file next to the compose file, and `docker-compose.dokploy.yml`
+   pulls each one in via `${VAR:-default}` — the documented Dokploy pattern.
+   If you also `Attach` the Postgres to the service, `DATABASE_URL` is
+   injected for you; otherwise paste the database's **Internal Connection
+   URL** (Connection tab) as `DATABASE_URL`.
 6. **Domain**: *Domains → Add domain* → `booking.binomargroup.com`, service
    `web`, port `8000`. Issue the Let's Encrypt certificate and keep HTTPS
-   redirect on.
+   redirect on. **Redeploy required**: for Docker Compose, domains are applied
+   as Traefik labels — after adding/changing a domain you must click
+   **Redeploy** for routing to take effect (latest Dokploy docs).
 7. **Deploy**. First build takes a few minutes. The `web` container runs
    migrations and static collection automatically on every boot; the
    `scheduler` container starts once `web` is healthy.
@@ -82,6 +91,11 @@ Example below uses `booking.binomargroup.com`.
   volume + Settings) persists.
 * Bad gateway / "invalid host" → `DJANGO_ALLOWED_HOSTS` missing the domain,
   or the domain's service/port is not `web`/`8000`.
+* `web` container "unhealthy" / scheduler "dependency failed to start" → the
+  image healthcheck probes `http://127.0.0.1:8000/health/`; the app always
+  allows loopback for this, so a failure means gunicorn never started — open
+  the service **Logs** (service `web`) and look for migrate/DB errors above
+  the gunicorn banner.
 * CSRF error on booking → `PUBLIC_BASE_URL` must match the browser address
   exactly (`https://`, no trailing slash).
 * Redirect loop over http → intended: `DJANGO_DEBUG=false` forces HTTPS; use
