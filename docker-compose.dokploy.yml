@@ -30,6 +30,11 @@ services:
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://127.0.0.1:8000}"
       DJANGO_CSRF_TRUSTED_ORIGINS: "${DJANGO_CSRF_TRUSTED_ORIGINS:-}"
     restart: unless-stopped
+    # Dokploy's managed databases and the Traefik reverse proxy live on the
+    # shared dokploy-network — join it so DATABASE_URL hostnames resolve and
+    # Traefik can route the domain to this container.
+    networks:
+      - dokploy-network
 
   scheduler:
     build: .
@@ -48,3 +53,12 @@ services:
       web:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - dokploy-network
+
+networks:
+  # External network created by Dokploy itself. The web/scheduler services
+  # join it so they can reach the Dokploy-managed PostgreSQL referenced in
+  # DATABASE_URL; Traefik (also on this network) routes the public domain.
+  dokploy-network:
+    external: true

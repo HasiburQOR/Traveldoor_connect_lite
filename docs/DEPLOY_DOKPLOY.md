@@ -96,6 +96,14 @@ Example below uses `booking.binomargroup.com`.
   allows loopback for this, so a failure means gunicorn never started — open
   the service **Logs** (service `web`) and look for migrate/DB errors above
   the gunicorn banner.
+* `could not translate host name "<db-host>"` → the compose services and the
+  database must share **dokploy-network**; `docker-compose.dokploy.yml` joins
+  it for both services, so this only happens if that block was removed. Note
+  Dokploy's *attach database* dropdown lists Applications only — with a
+  Compose resource, set `DATABASE_URL` manually (the file handles networking).
+* Environment values are **raw** — no `<`/`>` placeholder brackets, no
+  quotes. A `DATABASE_URL` that starts with `<` parses to an empty host and
+  crashes `migrate` on boot.
 * CSRF error on booking → `PUBLIC_BASE_URL` must match the browser address
   exactly (`https://`, no trailing slash).
 * Redirect loop over http → intended: `DJANGO_DEBUG=false` forces HTTPS; use
