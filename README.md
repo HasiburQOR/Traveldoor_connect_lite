@@ -46,6 +46,11 @@ python manage.py runscheduler           # loop
 python manage.py runscheduler --once    # single tick
 ```
 
+Email delivery: in dev the default backend prints emails to the console —
+see **[docs/EMAILS.md](docs/EMAILS.md)** for configuring real SMTP (Settings
+screen or `.env`), verifying with the dashboard test-email button, and
+debugging.
+
 ## Run with Docker (local test)
 
 ```bash
