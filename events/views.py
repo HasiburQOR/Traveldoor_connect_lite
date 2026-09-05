@@ -7,8 +7,8 @@ entry (FR-9.1) and HTMX requests swap in refreshed partials (NFR-2).
 import datetime
 
 from django.contrib import messages
-from django.contrib.admin.views.decorators import staff_member_required
-from django.db import transaction
+from core.decorators import staff_member_required  # app login page, not the Django admin
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -20,9 +20,9 @@ from notifications.emails import send_attention_email
 from notifications.jobs import close_expired_events
 from notifications.models import HostNotification
 
-from .forms import EventForm, SlotForm, TeamMemberForm
-from .forms_bulk import BulkSlotForm
-from .models import Event, Slot, TeamMember
+from .forms import EventForm, HostPickForm, PersonForm, SlotForm, TeamMemberForm
+from .forms_bulk import SlotBuilderForm
+from .models import Event, EventDay, Person, Slot, TeamMember
 
 
 def _team_section(request, event, *, form=None, member=None):
@@ -38,15 +38,20 @@ def _team_section(request, event, *, form=None, member=None):
                   {"event": event, "members": members, "form": form, "member": member})
 
 
-def _slot_section(request, event, *, form=None, slot=None, bulk_form=None, host_count=None):
+def _slot_section(request, event, *, form=None, slot=None, builder_form=None, host_count=None,
+                  selected_date=None):
     """Render the whole slot section, optionally with an open form inside it.
 
-    Same swap-target rule as ``_team_section``.
+    Same swap-target rule as ``_team_section``. ``selected_date`` narrows the
+    table to one day (the calendar chip the admin clicked).
     """
     slots = event.slots.select_related("host").prefetch_related("bookings")
+    if selected_date is not None:
+        slots = [s for s in slots if s.date == selected_date]
     return render(request, "events/partials/slot_section.html",
                   {"event": event, "slots": slots, "form": form, "slot": slot,
-                   "bulk_form": bulk_form, "host_count": host_count})
+                   "builder_form": builder_form, "host_count": host_count,
+                   "selected_date": selected_date})
 
 
 def _booking_section(request, event):
@@ -137,11 +142,37 @@ def event_detail(request, pk):
     slots = list(event.slots.select_related("host").prefetch_related("bookings"))
     bookable = [s for s in slots if not s.is_break]
     confirmed = event.bookings.filter(status=Booking.STATUS_CONFIRMED).count()
-    days_left = (event.end_date - timezone.localdate()).days
+    today = timezone.localdate()
+    event_days = event.event_dates()
+    days_left = sum(1 for d in event_days if d >= today)
+    skipped_dates = EventDay.skipped_dates_for(event)
+    # Calendar chips: one per event day, with its live counts and skipped flag,
+    # so the organiser sees the whole schedule as a day-by-day board.
+    day_chips = []
+    for d in event_days:
+        day_slots = [s for s in slots if s.date == d and not s.is_break]
+        day_chips.append({
+            "date": d,
+            "past": d < today,
+            "skipped": d in skipped_dates,
+            "slot_count": len(day_slots),
+            "booked": sum(1 for s in day_slots if s.bookings.filter(status=Booking.STATUS_CONFIRMED).exists()),
+        })
+    # A chip click narrows the slot table to that day (?date=YYYY-MM-DD).
+    selected_date = None
+    raw_date = request.GET.get("date")
+    if raw_date:
+        try:
+            selected_date = datetime.date.fromisoformat(raw_date)
+        except ValueError:
+            pass
     context = {
         "event": event,
+        "event_days": [{"date": d, "past": d < today} for d in event_days],
+        "day_chips": day_chips,
+        "selected_date": selected_date,
         "members": event.team_members.prefetch_related("slots"),
-        "slots": slots,
+        "slots": [s for s in slots if selected_date is None or s.date == selected_date],
         "bookings": event.bookings.select_related("slot", "slot__host").order_by("-created_at"),
         "summary": {
             "hosts": event.team_members.filter(is_active=True).count(),
@@ -290,33 +321,153 @@ def event_clone(request, pk):
 
 
 # ---------------------------------------------------------------------------
+# People directory (FR-2) — manage people once, pick them as hosts per event
+# ---------------------------------------------------------------------------
+def _people_queryset():
+    """The directory list, annotated with how many events each person hosts."""
+    return Person.objects.annotate(
+        host_count=Count("team_members", distinct=True,
+                         filter=Q(team_members__is_active=True)),
+    )
+
+
+def _sync_hosts_from_person(person):
+    """Re-apply a person's directory details onto their active host records.
+
+    Returns ``(synced, skipped)``; a record is skipped only when the email
+    change would collide with a different host on the same event.
+    """
+    synced = skipped = 0
+    for member in person.team_members.filter(is_active=True):
+        member.name = person.name
+        member.email = person.email
+        member.role = person.role
+        member.photo_url = person.photo_url
+        member.photo = person.photo  # shares the stored file, no copy on disk
+        member.linked_user = person.linked_user
+        try:
+            member.save()
+            synced += 1
+        except IntegrityError:
+            skipped += 1  # another host on that event already uses this email
+    return synced, skipped
+
+
+@staff_member_required
+def person_list(request):
+    return render(request, "events/people_list.html",
+                  {"people": _people_queryset()})
+
+
+@staff_member_required
+def person_create(request):
+    form = PersonForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        person = form.save()
+        log_action(request.user, AuditLogEntry.ACTION_CREATE, person,
+                   "Person added to the directory.")
+        messages.success(
+            request, f"{person.name} added. Select them as a host on any event's Hosts section.")
+        return redirect("events_people:list")
+    return render(request, "events/person_form.html", {
+        "form": form, "title": "New person",
+        "subtitle": "People live in one directory — when an event needs hosts you just pick them.",
+    })
+
+
+@staff_member_required
+def person_update(request, pk):
+    person = get_object_or_404(Person, pk=pk)
+    form = PersonForm(request.POST or None, request.FILES or None, instance=person)
+    if request.method == "POST" and form.is_valid():
+        person = form.save()
+        synced = skipped = 0
+        if form.cleaned_data.get("sync_hosts"):
+            synced, skipped = _sync_hosts_from_person(person)
+        log_action(request.user, AuditLogEntry.ACTION_UPDATE, person,
+                   f"Person updated; {synced} active host record(s) synced.")
+        message = f"{person.name} updated."
+        if synced:
+            message += f" {synced} event host record(s) refreshed."
+        if skipped:
+            message += (f" {skipped} host record(s) kept their old email "
+                        "(another host on that event already uses it).")
+        messages.success(request, message)
+        return redirect("events_people:list")
+    hosting = person.team_members.filter(is_active=True).count()
+    return render(request, "events/person_form.html", {
+        "form": form, "person": person, "title": f"Edit person — {person.name}",
+        "subtitle": (f"Currently hosting at {hosting} event{'s' if hosting != 1 else ''}."
+                     if hosting else "Not hosting any events right now."),
+    })
+
+
+@staff_member_required
+@require_POST
+def person_delete(request, pk):
+    """Remove a directory entry. Host records on events keep their snapshot
+    (TeamMember.person is SET_NULL), so past events and their bookings are
+    never touched."""
+    person = get_object_or_404(Person, pk=pk)
+    name = person.name
+    hosting = person.team_members.filter(is_active=True).count()
+    log_action(request.user, AuditLogEntry.ACTION_DELETE, person,
+               details=f"Person deleted; {hosting} active host record(s) kept their details.")
+    person.delete()
+    if request.headers.get("HX-Request"):
+        return render(request, "events/partials/people_table.html",
+                      {"people": _people_queryset()})
+    messages.success(
+        request, f"{name} removed from the directory."
+        + (f" Their {hosting} active event host record(s) keep the details they were added with."
+           if hosting else ""))
+    return redirect("events_people:list")
+
+
+# ---------------------------------------------------------------------------
 # Team management (FR-2)
 # ---------------------------------------------------------------------------
 @staff_member_required
 def team_add(request, event_pk):
+    """Select people from the directory and add them as hosts (FR-2.1).
+
+    Each pick copies the person's details onto a TeamMember snapshot for
+    this event — the visitor-facing roster keeps working exactly as before.
+    """
     event = get_object_or_404(Event, pk=event_pk)
-    form = TeamMemberForm(request.POST or None)
+    form = HostPickForm(request.POST or None, event=event)
     if request.method == "POST" and form.is_valid():
-        member = form.save(commit=False)
-        member.event = event
-        member.save()
-        log_action(request.user, AuditLogEntry.ACTION_CREATE, member,
-                   details=f"Host added to “{event.name}”.")
+        added, skipped = [], []
+        with transaction.atomic():
+            for person in form.cleaned_data["people"]:
+                if event.team_members.filter(email=person.email).exists():
+                    skipped.append(person.name)  # e.g. a removed host: reactivate instead
+                    continue
+                member = TeamMember.create_from_person(event, person)
+                log_action(request.user, AuditLogEntry.ACTION_CREATE, member,
+                           details=f"Host added to “{event.name}” (picked from the people directory).")
+                added.append(member.name)
         if request.headers.get("HX-Request"):
             return _team_section(request, event)
-        messages.success(request, f"{member.name} added to the team.")
+        if added:
+            label = added[0] if len(added) == 1 else f"{len(added)} hosts"
+            messages.success(request, f"{label} added to the team.")
+        if skipped:
+            messages.warning(request,
+                             f"Already on this event's team (removed hosts can be reactivated): "
+                             f"{', '.join(skipped)}.")
         return redirect("events:detail", event.pk)
     if request.method == "POST" and request.headers.get("HX-Request"):
         return _team_section(request, event, form=form)
-    return render(request, "events/partials/team_form.html",
-                  {"form": form, "event": event, "member": None})
+    return render(request, "events/partials/team_pick_form.html",
+                  {"form": form, "event": event})
 
 
 @staff_member_required
 def team_edit(request, event_pk, pk):
     event = get_object_or_404(Event, pk=event_pk)
     member = get_object_or_404(TeamMember, pk=pk, event=event)
-    form = TeamMemberForm(request.POST or None, instance=member)
+    form = TeamMemberForm(request.POST or None, request.FILES or None, instance=member)
     if request.method == "POST" and form.is_valid():
         member = form.save()
         log_action(request.user, AuditLogEntry.ACTION_UPDATE, member, "Host details updated.")
@@ -400,7 +551,13 @@ def team_delete(request, event_pk, pk):
 @staff_member_required
 def slot_add(request, event_pk):
     event = get_object_or_404(Event, pk=event_pk)
-    form = SlotForm(request.POST or None, event=event)
+    initial = {}
+    if request.GET.get("date"):
+        try:
+            initial["date"] = datetime.date.fromisoformat(request.GET["date"])
+        except ValueError:
+            pass
+    form = SlotForm(request.POST or None, event=event, initial=initial or None)
     if request.method == "POST" and form.is_valid():
         slot = form.save(commit=False)
         slot.event = event
@@ -435,21 +592,29 @@ def slot_edit(request, event_pk, pk):
 
 
 @staff_member_required
-def slot_bulk_add(request, event_pk):
-    """Generate many predefined slots in one go (BRD success criteria)."""
+def slot_build(request, event_pk):
+    """Build a day pattern once and stamp it onto the chosen event days.
+
+    The days come from the event's own calendar (auto-synced with the event's
+    dates and weekday selection), the host is optional (blank = every active
+    host), and any number of break windows can be kept clear — optionally
+    shown in the schedule as non-bookable "Break" entries.
+    """
     event = get_object_or_404(Event, pk=event_pk)
-    form = BulkSlotForm(request.POST or None, event=event)
     hosts = event.team_members.filter(is_active=True)
+    form = SlotBuilderForm(request.POST or None, event=event,
+                           host=request.GET.get("host") or None)
     created, skipped = 0, 0
     if request.method == "POST" and form.is_valid():
         times = form.generate_times()
         capacity = form.cleaned_data["capacity"]
         duration = form.cleaned_data["duration_minutes"]
-        break_window = form.break_window()
-        for host in hosts:
-            for date in form.generate_dates():
+        windows = form.break_windows() if form.cleaned_data.get("mark_breaks") else []
+        target_hosts = [form.cleaned_data["host"]] if form.cleaned_data.get("host") else list(hosts)
+        for host in target_hosts:
+            for date in form.selected_dates():
                 for start in times:
-                    _, created_now = Slot.objects.get_or_create(
+                    _, made = Slot.objects.get_or_create(
                         host=host, date=date, start_time=start,
                         defaults={
                             # mode is set by Slot.save() from the event type.
@@ -457,14 +622,13 @@ def slot_bulk_add(request, event_pk):
                             "duration_minutes": duration,
                         },
                     )
-                    if created_now:
+                    if made:
                         created += 1
                     else:
                         skipped += 1
-                if break_window is not None:
-                    # One non-bookable entry per host per day, so the break is
+                for break_start, break_end in windows:
+                    # One non-bookable entry per host per day, so each break is
                     # visible in the schedule rather than an unexplained gap.
-                    break_start, break_end = break_window
                     minutes = int(
                         (datetime.datetime.combine(date, break_end)
                          - datetime.datetime.combine(date, break_start)).total_seconds() // 60
@@ -481,14 +645,14 @@ def slot_bulk_add(request, event_pk):
                         created += 1
         if created or skipped:
             log_action(request.user, AuditLogEntry.ACTION_CREATE, event,
-                       details=f"Bulk-generated {created} slot(s) ({skipped} already existed).")
+                       details=f"Slot builder: {created} slot(s) created ({skipped} already existed).")
         if request.headers.get("HX-Request"):
             return _slot_section(request, event)
         messages.success(request, f"{created} slot(s) created ({skipped} already existed).")
         return redirect("events:detail", event.pk)
     if request.method == "POST" and request.headers.get("HX-Request"):
-        return _slot_section(request, event, bulk_form=form, host_count=hosts.count())
-    return render(request, "events/partials/slot_bulk_form.html",
+        return _slot_section(request, event, builder_form=form, host_count=hosts.count())
+    return render(request, "events/partials/slot_builder_form.html",
                   {"form": form, "event": event, "host_count": hosts.count()})
 
 
@@ -542,5 +706,57 @@ def slot_reopen(request, event_pk, pk):
     log_action(request.user, AuditLogEntry.ACTION_REACTIVATE, slot, "Slot re-opened.")
     if request.headers.get("HX-Request"):
         return _slot_section(request, event)
+    return redirect("events:detail", event.pk)
+
+
+@staff_member_required
+@require_POST
+def day_toggle_skip(request, event_pk, date):
+    """Skip (or re-open) one event day — the calendar's day-level control.
+
+    Skipping hides the whole day from visitors, blocks new slot creation on
+    it, and cancels that day's confirmed bookings with notice emails so both
+    the visitor and the host know the meeting is off. Re-opening flips the
+    flag back; the day's slots were never touched, so they simply return.
+    """
+    from bookings.services import cancel_booking
+    from notifications.emails import send_cancellation_to_visitor
+
+    event = get_object_or_404(Event, pk=event_pk)
+    try:
+        day = datetime.date.fromisoformat(date)
+    except ValueError:
+        return redirect("events:detail", event.pk)
+    if day not in event.event_dates():
+        messages.warning(request, "That date is not one of this event's days.")
+        return redirect("events:detail", event.pk)
+    entry, _ = EventDay.objects.get_or_create(event=event, date=day)
+    entry.skipped = not entry.skipped
+    entry.save(update_fields=["skipped"])
+    if entry.skipped:
+        affected = list(
+            Booking.objects.filter(
+                event=event, slot__date=day, status=Booking.STATUS_CONFIRMED
+            ).select_related("slot", "slot__host")
+        )
+        with transaction.atomic():
+            for booking in affected:
+                cancel_booking(booking)
+            log_action(
+                request.user, AuditLogEntry.ACTION_CLOSE, event,
+                details=f"Day {day:%d %b %Y} skipped; {len(affected)} booking(s) cancelled with notice.",
+            )
+        for booking in affected:
+            send_cancellation_to_visitor(
+                booking, reason=f"The organiser is not holding meetings on {day:%d %B}."
+            )
+        verb = f"Day skipped — {len(affected)} meeting(s) cancelled and visitors notified."
+    else:
+        log_action(request.user, AuditLogEntry.ACTION_REACTIVATE, event,
+                   details=f"Day {day:%d %b %Y} re-opened.")
+        verb = "Day re-opened — its slots are bookable again."
+    if request.headers.get("HX-Request"):
+        return _slot_section(request, event)
+    messages.success(request, verb)
     return redirect("events:detail", event.pk)
 

@@ -21,6 +21,7 @@ class NotificationLog(models.Model):
     TYPE_RESCHEDULE = "reschedule"
     TYPE_ADMIN_ACCOUNT = "admin_account"
     TYPE_ATTENTION = "attention"
+    TYPE_PASSWORD_RESET = "password_reset"
     TYPE_CHOICES = [
         (TYPE_CONFIRMATION, "Confirmation"),
         (TYPE_REMINDER, "Reminder"),
@@ -28,6 +29,7 @@ class NotificationLog(models.Model):
         (TYPE_RESCHEDULE, "Reschedule"),
         (TYPE_ADMIN_ACCOUNT, "Admin account"),
         (TYPE_ATTENTION, "Attention"),
+        (TYPE_PASSWORD_RESET, "Password reset"),
     ]
 
     CHANNEL_EMAIL = "email"

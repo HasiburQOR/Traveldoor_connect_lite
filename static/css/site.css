@@ -466,6 +466,23 @@ ul.radio-list label{display:inline; font-weight:400;}
 .inline-form .note{background:var(--card);}
 .inline-form .note{font-size:13px;}
 
+/* Multi-choice checkbox lists (the people picker inside team sections). */
+.check-list{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  margin:2px 0 4px;
+}
+.check-list .check-option{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  font-weight:400;
+  font-size:13.5px;
+  margin:0;
+  cursor:pointer;
+}
+
 /* List pagination — sits under a table, inside its card. */
 .pager{
   display:flex;
@@ -810,3 +827,33 @@ img.avatar{display:block;}
 @media (max-width:420px){
   .slot-grid{grid-template-columns:repeat(2,1fr);}
 }
+
+/* ==========================================================================
+   Event schedule block (event form + event detail date breakdown)
+   ========================================================================== */
+.schedule-modes{
+  display:flex; flex-direction:column; gap:6px;
+  padding:10px 12px; background:var(--paper); border-radius:var(--radius-md);
+}
+.schedule-mode{display:flex; align-items:center; gap:8px; font-weight:500; color:var(--navy); margin:0;}
+.weekday-row{display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:2px;}
+.weekday-row .weekday-check{
+  display:flex; align-items:center; gap:6px; margin:0;
+  font-size:13.5px; font-weight:500; color:var(--navy);
+  padding:6px 10px; background:var(--paper); border-radius:var(--radius-md);
+}
+.chip-row{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+.date-chip{font-size:12px;}
+.chip-past{opacity:.45;}
+
+/* ==========================================================================
+   Slot builder (event detail) — break rows added one at a time
+   ========================================================================== */
+.builder-breaks{
+  display:flex; flex-direction:column; gap:10px;
+}
+.break-row{
+  display:grid; grid-template-columns:1fr 1fr; gap:10px;
+}
+.break-row[hidden]{display:none;}
+

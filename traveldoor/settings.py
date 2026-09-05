@@ -224,6 +224,20 @@ if not DEBUG:
         "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
     }
 
+# -----------------------------------------------------------------------------
+# Uploaded files (host photos)
+# -----------------------------------------------------------------------------
+# WhiteNoise only serves build-time *static* files, so uploads live under
+# MEDIA_ROOT and are served by Django itself (see traveldoor/urls.py) — the
+# deployment is a single gunicorn container with a mounted volume, no separate
+# media server. Point DJANGO_MEDIA_ROOT at that volume in Docker/Dokploy
+# (the compose files mount /app/media already).
+MEDIA_URL = "/media/"
+MEDIA_ROOT = Path(os.environ.get("DJANGO_MEDIA_ROOT", str(BASE_DIR / "media")))
+# Room for a multipart POST carrying one 5 MB photo (the form-level cap) plus
+# the rest of the form; Django refuses larger bodies with a 400.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # -----------------------------------------------------------------------------

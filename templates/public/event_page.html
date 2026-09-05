@@ -7,6 +7,7 @@
   <p class="host-meta" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
     <span>
       {{ event.start_date|date:"j M Y" }}{% if event.duration_days > 1 %} – {{ event.end_date|date:"j M Y" }}{% endif %}
+      {% if event.runs_selected_days %}<span class="dot"></span>{{ event.weekday_summary }} only{% endif %}
       {% if event.is_offline and event.venue %}<span class="dot"></span>{{ event.venue }}{% endif %}
     </span>
     {% include "partials/type_pill.html" with event=event %}
@@ -22,8 +23,8 @@
 <div class="roster">
   {% for host in hosts %}
   <div class="host-card">
-    {% if host.photo_url %}
-      <img class="avatar" src="{{ host.photo_url }}" alt="">
+    {% if host.photo_display_url %}
+      <img class="avatar" src="{{ host.photo_display_url }}" alt="">
     {% else %}
       <div class="avatar">{{ host.name|slice:":1"|upper }}</div>
     {% endif %}

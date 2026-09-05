@@ -3,7 +3,7 @@ Account views — admin login handled by Django auth views; user management
 (create/edit admins, welcome email with credentials) per FR-8.2 and SRS 1.2.
 """
 from django.contrib import messages
-from django.contrib.admin.views.decorators import staff_member_required
+from core.decorators import staff_member_required  # app login page, not the Django admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render

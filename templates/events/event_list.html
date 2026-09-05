@@ -35,7 +35,7 @@
             </div>
           </td>
           <td>{% include "partials/type_pill.html" with event=event %}</td>
-          <td>{{ event.start_date|date:"j M Y" }}{% if event.duration_days > 1 %} → {{ event.end_date|date:"j M Y" }}{% endif %}</td>
+          <td>{{ event.start_date|date:"j M Y" }}{% if event.duration_days > 1 %} → {{ event.end_date|date:"j M Y" }}{% endif %}{% if event.runs_selected_days %}<br><span class="helptext">{{ event.weekday_summary }} only</span>{% endif %}</td>
           <td><span class="pill {{ event.status }}">{{ event.get_status_display }}</span></td>
           <td>
             {% if event.public_slug %}

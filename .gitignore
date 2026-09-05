@@ -7,6 +7,7 @@ __pycache__/
 db.sqlite3
 db.sqlite3-journal
 staticfiles/
+media/
 
 # Environment & secrets (.env.example stays tracked)
 .env
@@ -24,3 +25,9 @@ venv/
 *.log
 dc_out.txt
 dc_err.txt
+server.txt
+t_full.txt
+t_host.txt
+test_out.txt
+test_err.txt
+preview_confirmation.html

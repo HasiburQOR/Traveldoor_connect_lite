@@ -24,9 +24,21 @@ urlpatterns = [
     path("event/<int:event_pk>/team/<int:pk>/delete/", views.team_delete, name="team_delete"),
     # Slots (FR-3)
     path("event/<int:event_pk>/slots/add/", views.slot_add, name="slot_add"),
-    path("event/<int:event_pk>/slots/bulk/", views.slot_bulk_add, name="slot_bulk"),
+    path("event/<int:event_pk>/slots/build/", views.slot_build, name="slot_build"),
     path("event/<int:event_pk>/slots/<int:pk>/edit/", views.slot_edit, name="slot_edit"),
     path("event/<int:event_pk>/slots/<int:pk>/delete/", views.slot_delete, name="slot_delete"),
     path("event/<int:event_pk>/slots/<int:pk>/close/", views.slot_close, name="slot_close"),
     path("event/<int:event_pk>/slots/<int:pk>/reopen/", views.slot_reopen, name="slot_reopen"),
+    # Day calendar (skip / re-open a whole day)
+    path("event/<int:event_pk>/day/<str:date>/toggle-skip/", views.day_toggle_skip, name="day_toggle_skip"),
+]
+
+# The People directory is mounted at /panel/people/ under its own namespace
+# so it gets its own nav entry (see traveldoor/urls.py), the same way the
+# bookings app splits its admin and public namespaces.
+people_patterns = [
+    path("", views.person_list, name="list"),
+    path("new/", views.person_create, name="create"),
+    path("<int:pk>/edit/", views.person_update, name="edit"),
+    path("<int:pk>/delete/", views.person_delete, name="delete"),
 ]

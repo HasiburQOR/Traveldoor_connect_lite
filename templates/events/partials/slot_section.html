@@ -2,21 +2,57 @@
   <div class="card-head">
     <h2>Slots <span class="muted" style="font-family:var(--font-ui);font-size:13px;font-weight:400;">{{ slots|length }}</span></h2>
     <div class="actions" style="margin-top:0;">
-      <button class="btn btn-sm btn-ghost" hx-get="{% url 'events:slot_bulk' event.pk %}"
-              hx-target="#slot-form" hx-swap="innerHTML show:#slot-form:top">Bulk generate</button>
-      <button class="btn btn-sm btn-secondary" hx-get="{% url 'events:slot_add' event.pk %}"
+      <button class="btn btn-sm btn-ghost" hx-get="{% url 'events:slot_build' event.pk %}"
+              hx-target="#slot-form" hx-swap="innerHTML show:#slot-form:top">Build day plan</button>
+      <button class="btn btn-sm btn-secondary" hx-get="{% url 'events:slot_add' event.pk %}{% if selected_date %}?date={{ selected_date|date:'Y-m-d' }}{% endif %}"
               hx-target="#slot-form" hx-swap="innerHTML show:#slot-form:top">Add slot</button>
     </div>
   </div>
 
   <p class="helptext" style="margin:-8px 0 16px;">
-    {% if event.is_online %}Every slot on this event is a video call. Slots without a meeting link stay hidden from visitors.
+    {% if event.is_online %}Every slot on this event is a video call. Slots left blank get their own private auto-generated room; paste a link to use your own Meet/Zoom room instead.
     {% else %}Every slot on this event is in person. Slots fall back to the event's venue, hall and table unless you override them.{% endif %}
   </p>
 
+  {# Day-by-day calendar: one chip per event day. Click to see that day's
+     slots (and pre-fill the Add-slot date); the button skips/re-opens the
+     whole day. #}
+  {% if day_chips %}
+  <div class="day-chips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+    {% for chip in day_chips %}
+    <div class="day-chip{% if selected_date == chip.date %} is-active{% endif %}"
+         style="border:1px solid var(--line,#ddd);border-radius:8px;padding:6px 10px;{% if chip.skipped %}opacity:.55;{% endif %}{% if selected_date == chip.date %}border-color:var(--accent,#0a7);box-shadow:0 0 0 1px var(--accent,#0a7);{% endif %}">
+      <a href="?date={{ chip.date|date:'Y-m-d' }}" style="text-decoration:none;color:inherit;">
+        <strong>{{ chip.date|date:"D j M" }}</strong>
+        {% if chip.skipped %}
+          <span class="pill pill-gold">Skipped</span>
+        {% elif chip.past %}
+          <span class="muted">{{ chip.slot_count }} slot{{ chip.slot_count|pluralize }}</span>
+        {% else %}
+          <span class="muted">{{ chip.slot_count }} slot{{ chip.slot_count|pluralize }}{% if chip.booked %} · {{ chip.booked }} booked{% endif %}</span>
+        {% endif %}
+      </a>
+      {% if not chip.past %}
+      <form class="inline" method="post" action="{% url 'events:day_toggle_skip' event.pk chip.date|date:'Y-m-d' %}"
+            hx-post="{% url 'events:day_toggle_skip' event.pk chip.date|date:'Y-m-d' %}" hx-target="#slot-section" hx-swap="outerHTML"
+            {% if not chip.skipped %}hx-confirm="Skip {{ chip.date|date:'l, j F' }}? No meetings will be held that day; confirmed bookings are cancelled and visitors emailed."{% endif %}>
+        {% csrf_token %}
+        <button class="btn btn-sm {% if chip.skipped %}btn-secondary{% else %}btn-ghost{% endif %}" style="margin-top:4px;">
+          {% if chip.skipped %}Open day{% else %}Skip day{% endif %}
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% if selected_date %}
+  <p class="helptext" style="margin:-8px 0 12px;">Showing <strong>{{ selected_date|date:"l, j F" }}</strong> only — <a href="?">show all days</a>.</p>
+  {% endif %}
+  {% endif %}
+
   {# An open (or rejected) form lives here, inside the swap target. #}
   <div id="slot-form">
-    {% if bulk_form %}{% include "events/partials/slot_bulk_form.html" with form=bulk_form %}
+    {% if builder_form %}{% include "events/partials/slot_builder_form.html" with form=builder_form %}
     {% elif form %}{% include "events/partials/slot_form.html" with form=form slot=slot %}
     {% endif %}
   </div>
@@ -81,7 +117,7 @@
         </tr>
         {% endfor %}
         {% empty %}
-        <tr><td colspan="7" class="empty-row muted">No slots yet — add one, or use the bulk generator to fill a whole day.</td></tr>
+        <tr><td colspan="7" class="empty-row muted">No slots yet — add one, or build a whole day (or several) with the builder.</td></tr>
         {% endfor %}
       </tbody>
     </table>

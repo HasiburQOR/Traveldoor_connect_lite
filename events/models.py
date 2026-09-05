@@ -2,6 +2,7 @@
 Events app models (SRS section 5 data model + FR-1, FR-2, FR-3).
 
 Event        — time-boxed event with public booking link (FR-1, FR-4.1)
+Person       — directory entry for someone who can host at events (FR-2)
 TeamMember   — host attached to an event (FR-2)
 Slot         — predefined availability slot owned by a host (FR-3)
 """
@@ -39,16 +40,36 @@ class Event(models.Model):
 
     PROVIDER_GOOGLE_MEET = "google_meet"
     PROVIDER_ZOOM = "zoom"
+    # A private, auto-generated per-slot room (see Slot.save()). Free, no
+    # account or API needed — every slot gets its own room, so concurrent
+    # meetings never share one.
+    PROVIDER_JITSI = "jitsi"
     PROVIDER_CHOICES = [
         (PROVIDER_GOOGLE_MEET, "Google Meet"),
         (PROVIDER_ZOOM, "Zoom"),
+        (PROVIDER_JITSI, "Auto (private room)"),
     ]
+
+    # Calendar span guard — keeps event_dates() and the breakdown UI bounded.
+    MAX_SPAN_DAYS = 366
+    # Short labels for date.weekday() numbers (0=Monday).
+    WEEKDAY_LABELS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    WEEKDAYS_ALL = ",".join(str(d) for d in range(7))
 
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True, default="")
     start_date = models.DateField(help_text="First day the event is active.")
     duration_days = models.PositiveIntegerField(
         default=1, help_text="Number of days the event stays live (auto end date)."
+    )
+    # Which weekdays the event actually runs on, 0=Monday … 6=Sunday (matching
+    # date.weekday()). Blank = every day in the window counts, so events created
+    # before this field existed keep their exact behaviour.
+    active_weekdays = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Comma-separated weekdays the event runs on, 0=Mon … 6=Sun. Blank = every day.",
     )
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_DRAFT)
     public_slug = models.SlugField(max_length=80, unique=True, blank=True, null=True)
@@ -60,15 +81,18 @@ class Event(models.Model):
         help_text="Set once at creation; locked as soon as the event has slots.",
     )
 
-    # Event-level ONLINE defaults — used by every slot unless the slot
-    # overrides the link (online events only).
+    # Event-level ONLINE defaults — the provider labels every slot that
+    # doesn't pick its own; the link, when set, is one room shared by every
+    # slot without its own (online events only). A blank link means each slot
+    # gets its own auto-generated private room — see Slot.save().
     default_video_provider = models.CharField(
         max_length=20, choices=PROVIDER_CHOICES, blank=True, default="",
         help_text="Provider label shown to visitors (Google Meet or Zoom).",
     )
     default_meeting_link = models.URLField(
         blank=True, default="",
-        help_text="Meeting link created manually in Meet/Zoom; slots inherit it unless they set their own.",
+        help_text="Optional room shared by every slot without its own link; "
+                  "blank means each slot gets its own auto-generated private room.",
     )
 
     # Event-level OFFLINE defaults — overridable per slot (FR-3.3)
@@ -108,6 +132,52 @@ class Event(models.Model):
     def end_date(self):
         """Auto-computed end date (FR-1.1): inclusive last active day."""
         return self.start_date + datetime.timedelta(days=max(self.duration_days, 1) - 1)
+
+    # ----- weekday schedule -------------------------------------------------
+    def weekday_set(self):
+        """Active weekdays as a set of ints (0=Mon … 6=Sun); blank = all of them."""
+        parsed = set()
+        for part in (self.active_weekdays or "").split(","):
+            part = part.strip()
+            if part.isdigit() and int(part) <= 6:
+                parsed.add(int(part))
+        return parsed or set(range(7))
+
+    @property
+    def runs_selected_days(self):
+        """True when only some weekdays are active (drives the summary text)."""
+        return 0 < len(self.weekday_set()) < 7
+
+    @property
+    def weekday_summary(self):
+        """Short human summary, e.g. "Mon, Wed & Fri"; empty when every day counts."""
+        if not self.runs_selected_days:
+            return ""
+        labels = [self.WEEKDAY_LABELS[d] for d in sorted(self.weekday_set())]
+        if len(labels) == 1:
+            return labels[0]
+        return ", ".join(labels[:-1]) + " & " + labels[-1]
+
+    def event_dates(self):
+        """The actual dates the event runs on: selected weekdays inside the span.
+
+        Weekends (or any unticked day) between the first and last date are
+        simply skipped — free days inside the event's window.
+        """
+        days = self.weekday_set()
+        dates, current = [], self.start_date
+        end = self.end_date
+        while current <= end:
+            if current.weekday() in days:
+                dates.append(current)
+            current += datetime.timedelta(days=1)
+        return dates
+
+    @property
+    def last_event_date(self):
+        """Last date the event actually runs on (end of the span as a fallback)."""
+        dates = self.event_dates()
+        return dates[-1] if dates else self.end_date
 
     @property
     def booking_close_at(self):
@@ -169,6 +239,21 @@ class Event(models.Model):
         errors = {}
         if self.duration_days and self.duration_days < 1:
             errors["duration_days"] = "Duration must be at least 1 day."
+        if self.duration_days and self.duration_days > self.MAX_SPAN_DAYS:
+            errors["duration_days"] = (
+                f"Keep an event within {self.MAX_SPAN_DAYS} days — split longer runs into separate events."
+            )
+        if self.active_weekdays:
+            parts = [p.strip() for p in self.active_weekdays.split(",") if p.strip()]
+            bad = [p for p in parts if not p.isdigit() or int(p) > 6]
+            if bad:
+                errors["active_weekdays"] = "Weekdays must be numbers 0–6 (0=Monday), comma separated."
+            elif len(parts) < 7 and self.start_date and not self.event_dates():
+                errors["active_weekdays"] = (
+                    f"None of the selected weekdays fall between "
+                    f"{self.start_date:%d %b %Y} and {self.end_date:%d %b %Y} — "
+                    f"pick other days or widen the window."
+                )
         # Type-irrelevant fields never carry data — they are absent from the
         # form for the other type, so anything left over is stale.
         if self.is_online:
@@ -192,14 +277,90 @@ class Event(models.Model):
             return reverse("bookings:public_event", args=[self.public_slug])
         return ""
 
+class Person(models.Model):
+    """A person in the staff directory who can host at events (FR-2).
+
+    People are created once, with their details, on the People page. When
+    an event needs hosts the admin simply picks people from this
+    directory; each pick becomes a TeamMember snapshot on that event, so
+    past events keep the details they were published with even if the
+    directory entry changes later (and editing a person can re-sync their
+    active host records).
+    """
+
+    name = models.CharField(max_length=200)
+    email = models.EmailField(
+        unique=True, help_text="One directory entry per email address."
+    )
+    role = models.CharField(
+        max_length=120, blank=True, default="", help_text="Optional title shown to visitors."
+    )
+    photo_url = models.URLField(
+        blank=True, default="", help_text="Optional photo shown on the host roster (FR-4.2)."
+    )
+    # Uploaded photo — an easier alternative to the URL field. When both are
+    # set, the upload wins (see photo_display_url, which every public template
+    # reads; photo_url stays a plain URL so pasted links keep working).
+    photo = models.ImageField(
+        upload_to="people/%Y/%m/", null=True, blank=True,
+        help_text="Optional uploaded photo — shown instead of the photo link when present.",
+    )
+    linked_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="person_profiles",
+        help_text="Optional admin login; when signed in, this person sees their own schedule and reminders.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Inactive people are hidden from the “add hosts” picker but keep their hosting history.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name_plural = "people"
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def photo_display_url(self):
+        """The photo visitors see: an uploaded file wins over a pasted link."""
+        if self.photo and self.photo.name:
+            return self.photo.url
+        return self.photo_url
+
+
 class TeamMember(models.Model):
     """Host / team member attached to one event (FR-2.1, FR-2.2)."""
 
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="team_members")
+    # Directory link: kept as a snapshot when a Person is added to an event,
+    # so deleting or editing the directory entry never rewrites history on
+    # its own (the People page offers an explicit re-sync instead).
+    person = models.ForeignKey(
+        Person,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="team_members",
+        help_text="Directory entry this host was picked from.",
+    )
     name = models.CharField(max_length=200)
     email = models.EmailField()
     role = models.CharField(max_length=120, blank=True, default="", help_text="Optional title shown to visitors.")
     photo_url = models.URLField(blank=True, default="", help_text="Optional photo shown on the roster (FR-4.2).")
+    # Snapshot of Person.photo at pick/sync time. Assigning the FileField
+    # shares the stored file (no copy on disk) — deleting the event cleans up
+    # the row; the file itself lives on in the directory entry.
+    photo = models.ImageField(
+        upload_to="people/%Y/%m/", null=True, blank=True,
+        help_text="Optional uploaded photo — shown instead of the photo link when present.",
+    )
     linked_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -223,6 +384,59 @@ class TeamMember(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.event.name})"
+
+    @property
+    def photo_display_url(self):
+        """The photo visitors see: an uploaded file wins over a pasted link."""
+        if self.photo and self.photo.name:
+            return self.photo.url
+        return self.photo_url
+
+    @classmethod
+    def create_from_person(cls, event, person):
+        """Add a directory person to an event as a host (details copied)."""
+        return cls.objects.create(
+            event=event,
+            person=person,
+            name=person.name,
+            email=person.email,
+            role=person.role,
+            photo_url=person.photo_url,
+            photo=person.photo,
+            linked_user=person.linked_user,
+        )
+
+
+class EventDay(models.Model):
+    """Per-day flag board for an event's own dates (the calendar's state).
+
+    ``skipped`` means the organiser is not holding meetings that day at all:
+    the day disappears from visitors, new slots cannot be created on it, and
+    skipping cancels that day's confirmed bookings with notice. Unskipping
+    simply makes the existing slots visible again — nothing is destroyed, so
+    the action is always reversible.
+    """
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="day_settings")
+    date = models.DateField()
+    skipped = models.BooleanField(default=False)
+    note = models.CharField(max_length=200, blank=True, default="")
+
+    class Meta:
+        ordering = ["date"]
+        constraints = [
+            models.UniqueConstraint(fields=["event", "date"], name="unique_event_day"),
+        ]
+
+    def __str__(self):
+        return f"{self.event.name} — {self.date:%Y-%m-%d}{' (skipped)' if self.skipped else ''}"
+
+    @classmethod
+    def skipped_dates_for(cls, event):
+        """Set of skipped dates — one tiny query, safe to call per request."""
+        return set(
+            cls.objects.filter(event=event, skipped=True).values_list("date", flat=True)
+        )
 
 
 class Slot(models.Model):
@@ -294,12 +508,41 @@ class Slot(models.Model):
     def __str__(self):
         return f"{self.host.name} — {self.date} {self.start_time.strftime('%H:%M')} ({self.get_mode_display()})"
 
+    def _auto_meeting_link(self):
+        """A private, deterministic room URL for this slot (online events).
+
+        Room identity is (event, host, date, start time) — exactly the tuple
+        the ``unique_host_date_time`` constraint makes unique — so two slots
+        can never generate the same room, and the same slot always generates
+        the same room. No API, no account: Jitsi rooms materialise on demand
+        when the first person opens the link and never expire.
+        """
+        import re
+
+        def slug(text):
+            return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-") or "x"
+
+        parts = [
+            "tdc", slug(self.event.name), self.event.pk,
+            self.date.isoformat(), self.start_time.strftime("%H%M"), self.host.pk,
+        ]
+        return "https://meet.jit.si/" + "-".join(str(p) for p in parts)
+
     def save(self, *args, **kwargs):
-        """Mode always mirrors the parent event's type (no per-slot override)."""
+        """Mode always mirrors the parent event's type (no per-slot override).
+
+        Online slots with no link of their own and no event default get a
+        private auto-generated room, so every meeting has its own link and
+        concurrent meetings never share one.
+        """
         if self.event_id:
             self.mode = self.event.event_type
             if self.mode == self.MODE_ONLINE:
                 self.venue = self.hall_name = self.table_name = ""
+                if not self.meeting_link and not self.event.default_meeting_link:
+                    self.meeting_link = self._auto_meeting_link()
+                    if not self.video_provider:
+                        self.video_provider = Event.PROVIDER_JITSI
             else:
                 self.video_provider = self.meeting_link = ""
         update_fields = kwargs.get("update_fields")
@@ -309,6 +552,7 @@ class Slot(models.Model):
                                                      "table_name", "video_provider", "meeting_link"])
             )
         return super().save(*args, **kwargs)
+
 
 
     # ----- computed helpers -------------------------------------------------
@@ -380,11 +624,29 @@ class Slot(models.Model):
             return False
         if self.seats_left() <= 0:
             return False
+        if self.date in EventDay.skipped_dates_for(self.event):
+            return False  # the organiser is not holding meetings this day
         if self.mode == self.MODE_ONLINE and not (self.effective_provider and self.effective_meeting_link):
             # An online slot only opens for booking once the admin has chosen
             # a provider and pasted the meeting link (FR-3.4).
             return False
         return True
+
+    def _overlapping_slots(self):
+        """Non-break slots on this event whose time window touches this one.
+
+        Python-side comparison because each slot carries its own duration.
+        """
+        overlaps = []
+        for other in (
+            Slot.objects.filter(event=self.event, date=self.date)
+            .exclude(status=Slot.STATUS_BREAK)
+            .exclude(pk=self.pk)
+            .select_related("host")
+        ):
+            if other.start_time < self.end_datetime.time() and self.start_time < other.end_datetime.time():
+                overlaps.append(other)
+        return overlaps
 
     def clean(self):
         errors = {}
@@ -393,10 +655,18 @@ class Slot(models.Model):
             # event) — the type-dependent checks run once the event is known.
             return
         self.mode = self.event.event_type
+        skipped = EventDay.skipped_dates_for(self.event)
+        if self.date in skipped and not self.is_break:
+            errors["date"] = (
+                f"{self.date:%d %b} is marked as a skipped day — no meetings are "
+                "held on it. Open the day again from the day list first."
+            )
         if self.is_break:
             # Breaks carry no meeting details: nobody joins them.
             if self.capacity is not None and self.capacity < 1:
                 raise ValidationError({"capacity": "Capacity must be at least 1."})
+            if errors:
+                raise ValidationError(errors)
             return
         if self.mode == self.MODE_ONLINE:
             if not (self.effective_provider and self.effective_meeting_link):
@@ -404,9 +674,35 @@ class Slot(models.Model):
                     "Online slots need a provider and a meeting link — set them here, "
                     "or as event defaults, before the slot opens for booking (FR-3.4)."
                 )
+            elif self.meeting_link:
+                # A manually pasted link must not collide with another slot
+                # running at the same time on the same link (auto-generated
+                # links are unique by construction, so only manual ones check).
+                for other in self._overlapping_slots():
+                    if other.mode == self.MODE_ONLINE and other.effective_meeting_link == self.effective_meeting_link:
+                        errors["meeting_link"] = (
+                            f"{other.host.name} already uses this link at "
+                            f"{other.start_time.strftime('%H:%M')} — concurrent meetings "
+                            "need their own link (or clear the field to get an auto room)."
+                        )
+                        break
         else:
             if not (self.effective_venue and self.effective_hall and self.effective_table):
                 errors["venue"] = "Offline slots require Venue, Hall Name and Table Name (set here or as event defaults) (FR-3.3)."
+            else:
+                # Two hosts cannot hold meetings at the same physical spot at
+                # the same time — the offline equivalent of a shared link.
+                mine = (self.effective_venue, self.effective_hall, self.effective_table)
+                for other in self._overlapping_slots():
+                    if other.mode == self.MODE_OFFLINE:
+                        theirs = (other.effective_venue, other.effective_hall, other.effective_table)
+                        if theirs == mine:
+                            errors["table_name"] = (
+                                f"{other.effective_venue} · {other.effective_hall} · "
+                                f"{other.effective_table} is already used by {other.host.name} at "
+                                f"{other.start_time.strftime('%H:%M')} — pick a free table or move the time."
+                            )
+                            break
         if self.capacity is not None and self.capacity < 1:
             errors["capacity"] = "Capacity must be at least 1."
         if errors:
@@ -417,13 +713,15 @@ class Slot(models.Model):
         """Every upcoming slot for a host — bookable or not (FR-4.3).
 
         The public page renders unbookable ones struck through so visitors see
-        the whole day, not just the gaps.
+        the whole day, not just the gaps. Whole days the organiser skipped are
+        hidden entirely — a day with no meetings has nothing to show.
         """
+        skipped = EventDay.skipped_dates_for(host.event)
         return [
             s for s in cls.objects.filter(host=host)
             .exclude(status__in=[cls.STATUS_CLOSED, cls.STATUS_BREAK])
             .select_related("event", "host")
-            if not s.is_past
+            if not s.is_past and s.date not in skipped
         ]
 
     @classmethod

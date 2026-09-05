@@ -35,12 +35,14 @@ class AuditLogEntry(models.Model):
     ]
 
     ENTITY_EVENT = "Event"
+    ENTITY_PERSON = "Person"
     ENTITY_TEAM_MEMBER = "TeamMember"
     ENTITY_SLOT = "Slot"
     ENTITY_BOOKING = "Booking"
     ENTITY_ADMIN_ACCOUNT = "AdminAccount"
     ENTITY_EVENT_CHOICES = [
         (ENTITY_EVENT, "Event"),
+        (ENTITY_PERSON, "Person"),
         (ENTITY_TEAM_MEMBER, "Team Member"),
         (ENTITY_SLOT, "Slot"),
         (ENTITY_BOOKING, "Booking"),

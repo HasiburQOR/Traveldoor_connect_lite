@@ -11,17 +11,25 @@ The two guarantees under test:
 Plus the immutability rule: the type locks as soon as the event has slots.
 """
 import datetime
+import io
+import tempfile
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.core import mail
-from django.test import TestCase
+from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
+from audit.models import AuditLogEntry
 from bookings.models import Booking
 from bookings.services import create_booking
-from events.forms import EventForm, SlotForm
-from events.forms_bulk import BulkSlotForm
-from events.models import Event, Slot, TeamMember
+from events.forms import EventForm, HostPickForm, SlotForm
+from events.forms_bulk import SlotBuilderForm
+from events.models import Event, Person, Slot, TeamMember
 from notifications.emails import send_booking_confirmation, send_reminder
 
 LINK = "https://meet.google.com/abc-defg-hij"
@@ -270,10 +278,10 @@ class SlotModeMirrorsEventTypeTest(EventTypeSetupMixin, TestCase):
         self.assertEqual(slot.meeting_link, "")
         self.assertEqual(slot.video_provider, "")
 
-    def test_bulk_generated_slots_inherit_the_event_type(self):
+    def test_builder_slots_inherit_the_event_type(self):
         event, host, _ = self.make_event(Event.TYPE_ONLINE)
-        self.client.post(reverse("events:slot_bulk", args=[event.pk]), {
-            "date_from": self.day.isoformat(), "date_to": self.day.isoformat(),
+        self.client.post(reverse("events:slot_build", args=[event.pk]), {
+            "host": "", "days": [self.day.isoformat()],
             "start_time": "09:00", "end_time": "10:00",
             "duration_minutes": "30", "capacity": "1",
         })
@@ -290,20 +298,20 @@ class SlotModeMirrorsEventTypeTest(EventTypeSetupMixin, TestCase):
 class BreakTimeTest(EventTypeSetupMixin, TestCase):
     """Breaks block time for a host and never reach a visitor."""
 
-    def _bulk(self, event, **overrides):
+    def _build(self, event, **overrides):
         data = {
-            "date_from": self.day.isoformat(), "date_to": self.day.isoformat(),
+            "host": "", "days": [self.day.isoformat()],
             "start_time": "09:00", "end_time": "12:00",
             "duration_minutes": "60", "capacity": "1", "gap_minutes": "0",
         }
         data.update(overrides)
-        return self.client.post(reverse("events:slot_bulk", args=[event.pk]), data,
+        return self.client.post(reverse("events:slot_build", args=[event.pk]), data,
                                 HTTP_HX_REQUEST="true")
 
-    def test_bulk_skips_slots_that_hit_the_break(self):
+    def test_builder_skips_slots_that_hit_the_break(self):
         event, host, slot = self.make_event(Event.TYPE_OFFLINE)
         slot.delete()
-        self._bulk(event, break_start="10:00", break_end="11:00", mark_break="")
+        self._build(event, break_start_1="10:00", break_end_1="11:00", mark_breaks="")
         starts = sorted(s.start_time.strftime("%H:%M")
                         for s in event.slots.exclude(status=Slot.STATUS_BREAK))
         # 09:00 runs to 10:00; 10:00 and the 10:00-11:00 window are skipped.
@@ -313,8 +321,8 @@ class BreakTimeTest(EventTypeSetupMixin, TestCase):
         event, host, slot = self.make_event(Event.TYPE_OFFLINE)
         slot.delete()
         # 30-min slots, break 10:15-10:45 -> 10:00 overlaps and must go.
-        self._bulk(event, duration_minutes="30", end_time="11:30",
-                   break_start="10:15", break_end="10:45", mark_break="")
+        self._build(event, duration_minutes="30", end_time="11:30",
+                    break_start_1="10:15", break_end_1="10:45", mark_breaks="")
         starts = sorted(s.start_time.strftime("%H:%M")
                         for s in event.slots.exclude(status=Slot.STATUS_BREAK))
         self.assertNotIn("10:00", starts)
@@ -324,7 +332,7 @@ class BreakTimeTest(EventTypeSetupMixin, TestCase):
     def test_break_can_be_shown_in_the_schedule(self):
         event, host, slot = self.make_event(Event.TYPE_OFFLINE)
         slot.delete()
-        self._bulk(event, break_start="10:00", break_end="11:00", mark_break="on")
+        self._build(event, break_start_1="10:00", break_end_1="11:00", mark_breaks="on")
         breaks = event.slots.filter(status=Slot.STATUS_BREAK)
         self.assertEqual(breaks.count(), 1)
         self.assertEqual(breaks.first().duration_minutes, 60)
@@ -332,7 +340,7 @@ class BreakTimeTest(EventTypeSetupMixin, TestCase):
     def test_gap_between_slots_is_respected(self):
         event, host, slot = self.make_event(Event.TYPE_OFFLINE)
         slot.delete()
-        self._bulk(event, duration_minutes="30", gap_minutes="15", end_time="11:00")
+        self._build(event, duration_minutes="30", gap_minutes="15", end_time="11:00")
         starts = sorted(s.start_time.strftime("%H:%M") for s in event.slots.all())
         self.assertEqual(starts, ["09:00", "09:45", "10:30"])
 
@@ -382,24 +390,24 @@ class BreakTimeTest(EventTypeSetupMixin, TestCase):
 
     def test_break_must_sit_inside_the_day(self):
         event, _, _ = self.make_event(Event.TYPE_OFFLINE)
-        form = BulkSlotForm({
-            "date_from": self.day.isoformat(), "date_to": self.day.isoformat(),
+        form = SlotBuilderForm({
+            "host": "", "days": [self.day.isoformat()],
             "start_time": "09:00", "end_time": "12:00",
             "duration_minutes": "30", "capacity": "1",
-            "break_start": "13:00", "break_end": "14:00",
+            "break_start_1": "13:00", "break_end_1": "14:00",
         }, event=event)
         self.assertFalse(form.is_valid())
-        self.assertIn("break_start", form.errors)
+        self.assertIn("break_start_1", form.errors)
 
     def test_half_a_break_is_rejected(self):
         event, _, _ = self.make_event(Event.TYPE_OFFLINE)
-        form = BulkSlotForm({
-            "date_from": self.day.isoformat(), "date_to": self.day.isoformat(),
+        form = SlotBuilderForm({
+            "host": "", "days": [self.day.isoformat()],
             "start_time": "09:00", "end_time": "12:00",
-            "duration_minutes": "30", "capacity": "1", "break_start": "10:00",
+            "duration_minutes": "30", "capacity": "1", "break_start_1": "10:00",
         }, event=event)
         self.assertFalse(form.is_valid())
-        self.assertIn("break_end", form.errors)
+        self.assertIn("break_end_1", form.errors)
 
 
 class CloneEventTest(EventTypeSetupMixin, TestCase):
@@ -504,3 +512,526 @@ class CalendarLinkTest(EventTypeSetupMixin, TestCase):
         outlook = outlook_calendar_url(booking)
         self.assertIn("rru=addevent", outlook)
         self.assertNotIn(" ", outlook)
+
+
+class EventScheduleTest(TestCase):
+    """FR-1.1 extension — the customisable schedule.
+
+    An event's ``duration_days`` stays a plain calendar span (first → last
+    date); ``active_weekdays`` decides which days inside that span actually
+    run, so weekends become free gaps unless they are ticked. Blank means
+    every day, which keeps pre-existing events exactly as they were.
+    """
+
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_user(
+            username="admin", password="pw-for-tests-123", is_staff=True, is_superuser=True
+        )
+        self.client.force_login(self.admin)
+        # Monday 1 June 2026 — a fixed anchor so the weekday maths is deterministic.
+        self.monday = datetime.date(2026, 6, 1)
+
+    def make_event(self, **overrides):
+        data = dict(
+            name="Roadshow", start_date=self.monday, duration_days=12,
+            event_type=Event.TYPE_ONLINE, status=Event.STATUS_LIVE,
+        )
+        data.update(overrides)
+        return Event.objects.create(**data)
+
+    def post_create(self, overrides=None, include_schedule=True):
+        data = {
+            "name": "Roadshow", "description": "",
+            "start_date": "2026-06-01", "duration_days": "5",
+            "event_type": Event.TYPE_ONLINE,
+            "default_video_provider": Event.PROVIDER_GOOGLE_MEET,
+            "default_meeting_link": LINK,
+            "reminder_hours_csv": "", "inapp_lead_minutes": "30",
+        }
+        if include_schedule:
+            data.update({
+                "schedule_present": "1", "schedule_mode": "count",
+                "weekday_0": "on", "weekday_1": "on", "weekday_2": "on",
+                "weekday_3": "on", "weekday_4": "on",
+            })
+        data.update(overrides or {})
+        return self.client.post(reverse("events:create"), data)
+
+    # ----- model: blank weekdays keep the old every-day behaviour ----------
+    def test_blank_weekdays_means_every_day(self):
+        event = self.make_event(duration_days=3)
+        self.assertEqual(
+            event.event_dates(),
+            [self.monday, self.monday + datetime.timedelta(days=1),
+             self.monday + datetime.timedelta(days=2)],
+        )
+        self.assertEqual(event.weekday_summary, "")
+        self.assertFalse(event.runs_selected_days)
+
+    def test_weekday_selection_skips_the_weekend_inside_the_span(self):
+        event = self.make_event(active_weekdays="0,1,2,3,4")  # Mon–Fri
+        dates = event.event_dates()  # span Mon 1 Jun → Fri 12 Jun
+        self.assertEqual(len(dates), 10)
+        self.assertNotIn(datetime.date(2026, 6, 6), dates)  # Sat 6 Jun is free
+        self.assertNotIn(datetime.date(2026, 6, 7), dates)  # Sun 7 Jun is free
+        self.assertEqual(dates[0], self.monday)
+        self.assertEqual(event.last_event_date, datetime.date(2026, 6, 12))
+        self.assertEqual(event.weekday_summary, "Mon, Tue, Wed, Thu & Fri")
+        self.assertTrue(event.runs_selected_days)
+
+    def test_weekends_themselves_can_be_the_event_days(self):
+        event = self.make_event(active_weekdays="5,6")
+        self.assertEqual(
+            event.event_dates(),
+            [datetime.date(2026, 6, 6), datetime.date(2026, 6, 7)],
+        )
+        self.assertEqual(event.weekday_summary, "Sat & Sun")
+
+    def test_all_seven_days_is_stored_blank(self):
+        event = self.make_event(active_weekdays="0,1,2,3,4,5,6")
+        self.assertFalse(event.runs_selected_days)  # canonical form: every day
+        self.assertEqual(len(event.event_dates()), 12)
+
+    def test_model_clean_rejects_a_selection_that_matches_no_date(self):
+        event = self.make_event(duration_days=1, active_weekdays="1")  # Monday, Tue only
+        with self.assertRaises(ValidationError):
+            event.full_clean()
+
+    # ----- form: weekday selection + range mode -----------------------------
+    def test_weekdays_round_trip_through_the_form(self):
+        self.assertEqual(self.post_create().status_code, 302)
+        event = Event.objects.get(name="Roadshow")
+        self.assertEqual(event.active_weekdays, "0,1,2,3,4")
+        self.assertEqual(event.weekday_summary, "Mon, Tue, Wed, Thu & Fri")
+
+    def test_all_seven_ticked_is_stored_blank(self):
+        response = self.post_create({"weekday_5": "on", "weekday_6": "on"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Event.objects.get(name="Roadshow").active_weekdays, "")
+
+    def test_range_mode_derives_the_day_count(self):
+        response = self.post_create({
+            "schedule_mode": "range", "duration_days": "99",
+            "end_date_input": "2026-06-03",  # Mon → Wed
+        })
+        self.assertEqual(response.status_code, 302)
+        event = Event.objects.get(name="Roadshow")
+        self.assertEqual(event.duration_days, 3)
+        self.assertEqual(event.end_date, datetime.date(2026, 6, 3))
+
+    def test_range_mode_rejects_an_end_before_the_start(self):
+        response = self.post_create({"schedule_mode": "range", "end_date_input": "2026-05-31"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "before the first day")
+        self.assertFalse(Event.objects.filter(name="Roadshow").exists())
+
+    def test_count_mode_caps_the_span(self):
+        response = self.post_create({"duration_days": "400"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "split longer runs")
+
+    def test_every_weekday_unticked_is_rejected(self):
+        response = self.post_create({
+            "weekday_0": "", "weekday_1": "", "weekday_2": "",
+            "weekday_3": "", "weekday_4": "",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Tick at least one day")
+        self.assertFalse(Event.objects.filter(name="Roadshow").exists())
+
+    def test_a_selection_with_no_matching_date_is_rejected(self):
+        response = self.post_create({
+            "duration_days": "1",  # Monday only…
+            "weekday_0": "", "weekday_1": "on",  # …but Tuesday alone is ticked.
+            "weekday_2": "", "weekday_3": "", "weekday_4": "",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "None of the selected weekdays")
+
+    def test_post_without_the_schedule_block_keeps_every_day(self):
+        """Older callers (scripts, API posts) send no schedule keys at all."""
+        response = self.post_create(include_schedule=False)
+        self.assertEqual(response.status_code, 302)
+        event = Event.objects.get(name="Roadshow")
+        self.assertEqual(event.active_weekdays, "")
+        self.assertEqual(event.duration_days, 5)
+
+    def test_the_form_renders_the_date_breakdown(self):
+        response = self.client.get(reverse("events:create") + "?type=online")
+        self.assertContains(response, "event-schedule")
+        self.assertContains(response, "Days of the week")
+        event = self.make_event(active_weekdays="0,1,2,3,4")
+        html = self.client.get(reverse("events:update", args=[event.pk])).content.decode()
+        self.assertIn("Mon 1 Jun", html)     # server-rendered chip
+        self.assertNotIn("Sat 6 Jun", html)  # weekend gap never becomes a chip
+
+    # ----- slot builder syncs with the weekday selection ---------------------
+    def test_builder_only_offers_the_events_own_days(self):
+        event = self.make_event(active_weekdays="0,1,2,3,4")
+        form = SlotBuilderForm(event=event)
+        offered = [value for value, _ in form.fields["days"].choices]
+        self.assertEqual(offered, [d.isoformat() for d in event.event_dates()])
+        self.assertNotIn("2026-06-06", offered)  # Saturday is a free day
+        form = SlotBuilderForm({
+            "host": "", "days": ["2026-06-01", "2026-06-02"],  # the first Mon & Tue
+            "start_time": "09:00", "end_time": "10:00",
+            "duration_minutes": "30", "capacity": "1",
+        }, event=event)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(
+            form.selected_dates(), [datetime.date(2026, 6, d) for d in (1, 2)]
+        )
+
+    def test_builder_rejects_a_day_the_event_doesnt_run(self):
+        event = self.make_event(active_weekdays="0,1,2,3,4")
+        form = SlotBuilderForm({
+            "host": "", "days": ["2026-06-06"],  # Saturday — a free day
+            "start_time": "09:00", "end_time": "10:00",
+            "duration_minutes": "30", "capacity": "1",
+        }, event=event)
+        self.assertFalse(form.is_valid())
+        self.assertIn("days", form.errors)
+
+    # ----- screens -----------------------------------------------------------
+    def test_detail_shows_the_date_breakdown_and_counts_days_left(self):
+        event = self.make_event(
+            start_date=datetime.date.today(), duration_days=7,
+            active_weekdays="0,1,2,3,4",
+        )
+        response = self.client.get(reverse("events:detail", args=[event.pk]))
+        html = response.content.decode()
+        self.assertIn("Event days", html)
+        self.assertIn("Mon, Tue, Wed, Thu &amp; Fri", html)
+        # Any 7-day window holds exactly five Mon–Fri days.
+        self.assertEqual(response.context["summary"]["days_left"], 5)
+
+    def test_public_page_mentions_the_weekday_summary(self):
+        # The public page only renders while the event is live, so anchor it
+        # on the next Monday strictly after today.
+        today = datetime.date.today()
+        next_monday = today + datetime.timedelta(days=(7 - today.weekday()) % 7 or 7)
+        event = self.make_event(start_date=next_monday, duration_days=5,
+                                active_weekdays="0,1,2,3,4", public_slug="sched")
+        html = self.client.get(
+            reverse("bookings_public:public_event", args=["sched"])
+        ).content.decode()
+        self.assertIn("Mon, Tue, Wed, Thu &amp; Fri", html)
+
+
+# ---------------------------------------------------------------------------
+# People directory + host picker (FR-2)
+# ---------------------------------------------------------------------------
+
+
+class PeopleDirectoryTest(EventTypeSetupMixin, TestCase):
+    """Hosts are picked from a people directory, not retyped per event.
+
+    The guarantees under test:
+
+      * a pick becomes a copied host snapshot on the event, never a live
+        reference — editing or deleting a person never rewrites an event's
+        published history on its own;
+      * the picker only offers available people who are not already hosting
+        that event (one host per email per event);
+      * editing a person can re-sync their active host records, and the sync
+        never touches hosts that were removed from an event.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.event, self.existing_host, self.slot = self.make_event(Event.TYPE_OFFLINE)
+        self.nadia = Person.objects.create(name="Nadia Islam", email="nadia@example.com",
+                                           role="Sales Lead")
+        self.tarik = Person.objects.create(name="Tarik Hasan", email="tarik@example.com",
+                                           role="Travel Consultant")
+        self.alum = Person.objects.create(name="Ex Employee", email="ex@example.com",
+                                          is_active=False)
+
+    def person_payload(self, **overrides):
+        payload = {"name": "Nadia Islam", "email": "nadia@example.com", "role": "Sales Lead",
+                   "photo_url": "", "linked_user": "", "is_active": "on"}
+        payload.update(overrides)
+        return payload
+
+    # ----- directory CRUD ----------------------------------------------------
+    def test_person_crud_is_logged_and_round_trips(self):
+        response = self.client.post(reverse("events_people:create"),
+                                    self.person_payload(name="Farhana Yeasmin",
+                                                        email="farhana@example.com",
+                                                        role="Operations"))
+        self.assertRedirects(response, reverse("events_people:list"))
+        person = Person.objects.get(email="farhana@example.com")
+        self.assertTrue(AuditLogEntry.objects.filter(
+            entity_type=AuditLogEntry.ENTITY_PERSON,
+            action=AuditLogEntry.ACTION_CREATE, entity_id=person.pk).exists())
+
+        response = self.client.post(reverse("events_people:edit", args=[person.pk]),
+                                    self.person_payload(name="Farhana Yeasmin",
+                                                        email="farhana@example.com",
+                                                        role="Head of Operations"))
+        self.assertRedirects(response, reverse("events_people:list"))
+        person.refresh_from_db()
+        self.assertEqual(person.role, "Head of Operations")
+
+        response = self.client.post(reverse("events_people:delete", args=[person.pk]))
+        self.assertRedirects(response, reverse("events_people:list"))
+        self.assertFalse(Person.objects.filter(pk=person.pk).exists())
+        self.assertTrue(AuditLogEntry.objects.filter(
+            entity_type=AuditLogEntry.ENTITY_PERSON,
+            action=AuditLogEntry.ACTION_DELETE, entity_id=person.pk).exists())
+
+    def test_one_directory_entry_per_email(self):
+        response = self.client.post(reverse("events_people:create"),
+                                    self.person_payload(name="Nadia Again"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "errorlist")
+        self.assertEqual(Person.objects.filter(email=self.nadia.email).count(), 1)
+
+    def test_the_people_page_lists_the_directory(self):
+        response = self.client.get(reverse("events_people:list"))
+        self.assertContains(response, "Nadia Islam")
+        self.assertContains(response, "Tarik Hasan")
+
+    # ----- the picker --------------------------------------------------------
+    def test_the_picker_only_offers_new_active_people(self):
+        offered = HostPickForm(event=self.event).fields["people"].queryset
+        self.assertIn(self.nadia, offered)
+        self.assertIn(self.tarik, offered)
+        self.assertNotIn(self.alum, offered)  # inactive: hidden from the picker
+        twin = Person.objects.create(name="Ripon Twin", email=self.existing_host.email)
+        self.assertNotIn(twin, HostPickForm(event=self.event).fields["people"].queryset)
+
+    def test_picking_people_adds_copied_host_snapshots(self):
+        response = self.client.post(reverse("events:team_add", args=[self.event.pk]),
+                                    {"people": [self.nadia.pk, self.tarik.pk]},
+                                    HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('id="team-section"', html)  # the swap target survives
+        self.assertIn("Nadia Islam", html)        # the roster shows the new hosts
+
+        nadia_host = self.event.team_members.get(email="nadia@example.com")
+        self.assertEqual(nadia_host.person, self.nadia)  # snapshot link kept
+        self.assertEqual(nadia_host.role, "Sales Lead")  # details copied, not referenced
+        self.assertTrue(AuditLogEntry.objects.filter(
+            entity_type=AuditLogEntry.ENTITY_TEAM_MEMBER,
+            action=AuditLogEntry.ACTION_CREATE, entity_id=nadia_host.pk).exists())
+
+    def test_posting_an_already_hosting_email_is_rejected_not_duplicated(self):
+        # A person whose email already hosts this event is outside the offered
+        # queryset, so the pick comes back as a validation error inside the
+        # section — never as a duplicate host.
+        twin = Person.objects.create(name="Ripon Twin", email=self.existing_host.email)
+        response = self.client.post(reverse("events:team_add", args=[self.event.pk]),
+                                    {"people": [twin.pk]}, HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('id="team-section"', html)
+        self.assertIn("errorlist", html)
+        self.assertEqual(self.event.team_members.filter(email=twin.email).count(), 1)
+
+    # ----- sync & delete semantics -------------------------------------------
+    def test_editing_a_person_can_resync_their_active_hosts(self):
+        host = TeamMember.create_from_person(self.event, self.nadia)
+        self.client.post(reverse("events_people:edit", args=[self.nadia.pk]),
+                         self.person_payload(name="Nadia Islam-Chowdhury",
+                                             role="Head of Sales", sync_hosts="on"))
+        host.refresh_from_db()
+        self.assertEqual(host.name, "Nadia Islam-Chowdhury")
+        self.assertEqual(host.role, "Head of Sales")
+
+    def test_editing_without_sync_leaves_hosts_untouched(self):
+        host = TeamMember.create_from_person(self.event, self.nadia)
+        self.client.post(reverse("events_people:edit", args=[self.nadia.pk]),
+                         self.person_payload(role="Head of Sales"))  # no sync_hosts
+        host.refresh_from_db()
+        self.assertEqual(host.role, "Sales Lead")  # the snapshot keeps its own details
+
+    def test_removed_hosts_are_left_alone_by_the_sync(self):
+        removed = TeamMember.create_from_person(self.event, self.tarik)
+        removed.is_active = False
+        removed.save(update_fields=["is_active"])
+        self.client.post(reverse("events_people:edit", args=[self.tarik.pk]),
+                         self.person_payload(name="Tarik Hasan", email="tarik@example.com",
+                                             role="Head of Consulting", sync_hosts="on"))
+        removed.refresh_from_db()
+        self.assertEqual(removed.role, "Travel Consultant")  # history untouched
+
+    def test_deleting_a_person_keeps_their_host_snapshots(self):
+        host = TeamMember.create_from_person(self.event, self.nadia)
+        self.client.post(reverse("events_people:delete", args=[self.nadia.pk]))
+        host.refresh_from_db()
+        self.assertIsNone(host.person)              # link dropped…
+        self.assertEqual(host.name, "Nadia Islam")  # …but the published details stay
+
+
+# ---------------------------------------------------------------------------
+# Slot builder (FR-3, day-based scheduling)
+# ---------------------------------------------------------------------------
+
+
+class SlotBuilderTest(EventTypeSetupMixin, TestCase):
+    """The builder stamps one day pattern onto the event's own days."""
+
+    def _build(self, event, **overrides):
+        data = {
+            "host": "", "days": [self.day.isoformat()],
+            "start_time": "09:00", "end_time": "10:00",
+            "duration_minutes": "30", "capacity": "1", "gap_minutes": "0",
+        }
+        data.update(overrides)
+        return self.client.post(reverse("events:slot_build", args=[event.pk]), data,
+                                HTTP_HX_REQUEST="true")
+
+    def test_blank_host_builds_for_every_active_host(self):
+        event, host, slot = self.make_event(Event.TYPE_OFFLINE)
+        slot.delete()
+        second = TeamMember.objects.create(event=event, name="Nino K",
+                                           email="nino@example.com")
+        self._build(event)
+        self.assertEqual(event.slots.count(), 4)  # 09:00 + 09:30, for both hosts
+        self.assertEqual(host.slots.count(), 2)
+        self.assertEqual(second.slots.count(), 2)
+
+    def test_one_host_only_builds_for_that_host(self):
+        event, host, slot = self.make_event(Event.TYPE_OFFLINE)
+        slot.delete()
+        second = TeamMember.objects.create(event=event, name="Nino K",
+                                           email="nino@example.com")
+        self._build(event, host=host.pk)
+        self.assertEqual(host.slots.count(), 2)
+        self.assertEqual(second.slots.count(), 0)
+
+    def test_the_host_shortcut_preselects_the_host(self):
+        event, host, _ = self.make_event(Event.TYPE_OFFLINE)
+        html = self.client.get(
+            reverse("events:slot_build", args=[event.pk]) + f"?host={host.pk}",
+            HTTP_HX_REQUEST="true").content.decode()
+        self.assertIn(f'value="{host.pk}" selected', html)
+
+    def test_several_break_windows_are_all_kept_clear(self):
+        event, host, slot = self.make_event(Event.TYPE_OFFLINE)
+        slot.delete()
+        self._build(event, end_time="13:00", duration_minutes="60",
+                    break_start_1="10:00", break_end_1="10:30",
+                    break_start_2="11:30", break_end_2="12:00",
+                    mark_breaks="on")
+        starts = sorted(s.start_time.strftime("%H:%M")
+                        for s in event.slots.exclude(status=Slot.STATUS_BREAK))
+        self.assertEqual(starts, ["09:00", "10:30", "12:00"])
+        breaks = sorted(s.start_time.strftime("%H:%M")
+                        for s in event.slots.filter(status=Slot.STATUS_BREAK))
+        self.assertEqual(breaks, ["10:00", "11:30"])
+
+    def test_overlapping_breaks_are_rejected(self):
+        event, _, _ = self.make_event(Event.TYPE_OFFLINE)
+        form = SlotBuilderForm({
+            "host": "", "days": [self.day.isoformat()],
+            "start_time": "09:00", "end_time": "17:00",
+            "duration_minutes": "30", "capacity": "1",
+            "break_start_1": "10:00", "break_end_1": "11:00",
+            "break_start_2": "10:30", "break_end_2": "11:30",
+        }, event=event)
+        self.assertFalse(form.is_valid())
+        self.assertIn("overlap", str(form.non_field_errors()))
+
+    def test_invalid_post_keeps_the_section_and_swap_target(self):
+        event, host, _ = self.make_event(Event.TYPE_OFFLINE)
+        response = self._build(event, start_time="14:15", end_time="12:32")
+        html = response.content.decode()
+        self.assertIn('id="slot-section"', html)  # the HTMX swap target survives
+        self.assertIn("14:15", html)              # the message names both times
+        self.assertIn("12:32", html)
+        self.assertIn("errorlist", html)
+
+
+# ---------------------------------------------------------------------------
+# Photo upload (people directory + host snapshots)
+# ---------------------------------------------------------------------------
+
+# A real 1x1 transparent PNG — ImageField/Pillow verify the bytes are an image.
+PHOTO_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+class PhotoUploadTest(EventTypeSetupMixin, TestCase):
+    """An uploaded photo rides along everywhere the photo link used to."""
+
+    def test_upload_creates_a_person_photo_and_media_url(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(MEDIA_ROOT=tmp):
+                photo = SimpleUploadedFile("face.png", PHOTO_PNG, content_type="image/png")
+                response = self.client.post(reverse("events_people:create"), {
+                    "name": "Anik Chowdhury", "email": "anik@example.com", "role": "",
+                    "photo_url": "", "photo": photo, "linked_user": "", "is_active": "on",
+                })
+                self.assertRedirects(response, reverse("events_people:list"))
+                person = Person.objects.get(email="anik@example.com")
+                self.assertTrue(person.photo.name.startswith("people/"))
+                self.assertTrue(person.photo_display_url.startswith("/media/people/"))
+                self.assertTrue((Path(tmp) / person.photo.name).exists())
+
+    def test_an_upload_wins_over_a_pasted_link(self):
+        person = Person.objects.create(name="Anik", email="anik@example.com",
+                                       photo_url="https://example.com/face.png")
+        self.assertEqual(person.photo_display_url, "https://example.com/face.png")
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(MEDIA_ROOT=tmp):
+                person.photo.save("face.png", ContentFile(PHOTO_PNG), save=True)
+                person.refresh_from_db()
+                self.assertTrue(person.photo_display_url.startswith("/media/people/"))
+
+    def test_picking_a_person_copies_the_upload_onto_the_host_snapshot(self):
+        person = Person.objects.create(name="Anik", email="anik@example.com")
+        event, _, _ = self.make_event(Event.TYPE_OFFLINE)
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(MEDIA_ROOT=tmp):
+                person.photo.save("face.png", ContentFile(PHOTO_PNG), save=True)
+                self.client.post(reverse("events:team_add", args=[event.pk]),
+                                 {"people": [person.pk]}, HTTP_HX_REQUEST="true")
+                host = event.team_members.get(email="anik@example.com")
+                self.assertEqual(host.photo.name, person.photo.name)  # shares the file
+                self.assertTrue(host.photo_display_url.startswith("/media/people/"))
+
+    def test_syncing_a_person_refreshes_their_host_photos(self):
+        person = Person.objects.create(name="Anik", email="anik@example.com")
+        event, _, _ = self.make_event(Event.TYPE_OFFLINE)
+        host = TeamMember.create_from_person(event, person)
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(MEDIA_ROOT=tmp):
+                person.photo.save("face.png", ContentFile(PHOTO_PNG), save=True)
+                self.client.post(reverse("events_people:edit", args=[person.pk]), {
+                    "name": "Anik", "email": "anik@example.com", "role": "",
+                    "photo_url": "", "photo": "", "linked_user": "",
+                    "is_active": "on", "sync_hosts": "on",
+                })
+                host.refresh_from_db()
+                self.assertEqual(host.photo.name, person.photo.name)
+
+    def test_oversized_uploads_are_rejected(self):
+        buf = io.BytesIO()
+        Image.new("RGB", (3000, 900), "red").save(buf, format="BMP")  # ~7.8 MB
+        big = SimpleUploadedFile("big.bmp", buf.getvalue(), content_type="image/bmp")
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(MEDIA_ROOT=tmp):
+                response = self.client.post(reverse("events_people:create"), {
+                    "name": "Big Photo", "email": "big@example.com", "role": "",
+                    "photo_url": "", "photo": big, "linked_user": "", "is_active": "on",
+                })
+        self.assertEqual(response.status_code, 200)  # the form comes back with the error
+        self.assertContains(response, "under 5 MB")
+        self.assertFalse(Person.objects.filter(email="big@example.com").exists())
+
+    def test_public_roster_uses_the_uploaded_photo(self):
+        event, host, _ = self.make_event(Event.TYPE_OFFLINE)
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(MEDIA_ROOT=tmp):
+                host.photo.save("face.png", ContentFile(PHOTO_PNG), save=True)
+                html = self.client.get(
+                    reverse("bookings_public:public_event", args=[event.public_slug])
+                ).content.decode()
+                self.assertIn(host.photo.url, html)

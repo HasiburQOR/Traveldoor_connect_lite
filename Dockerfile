@@ -23,9 +23,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # App code (.dockerignore keeps .env, db.sqlite3 and cruft out of the image).
 COPY . .
 
-# Unprivileged runtime user owns the tree (collectstatic writes staticfiles/).
+# Unprivileged runtime user owns the tree (collectstatic writes staticfiles/,
+# photo uploads write media/ — both are mounted as volumes at runtime).
 RUN useradd --system --create-home --shell /usr/sbin/nologin appuser \
-    && mkdir -p /app/staticfiles \
+    && mkdir -p /app/staticfiles /app/media \
     && chown -R appuser:appuser /app
 USER appuser
 

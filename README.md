@@ -145,8 +145,8 @@ sync by `Slot.save()`.
 
 | | Online event | Offline event |
 |---|---|---|
-| Event fields | provider (Google Meet / Zoom) + meeting link | venue, hall, table |
-| Slot fields | provider + link (blank = inherit event default) | venue/hall/table (blank = inherit) |
+| Event fields | provider + optional shared link (blank = per-slot auto rooms) | venue, hall, table |
+| Slot fields | provider + link (blank = shared link, else a private auto room) | venue/hall/table (blank = inherit) |
 | Visitor page | teal "Video call" pill | grey "In person" pill + venue/hall/table |
 | Emails | join link, "this is a video call" | full address + "bring this email to the venue" |
 | In-app alert | button that opens the meeting link | venue/hall/table, no link |

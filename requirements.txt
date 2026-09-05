@@ -6,3 +6,4 @@ whitenoise>=6.9,<7        # static file serving in production (no nginx needed)
 apscheduler>=3.10,<4     # background reminder/retry loop (runscheduler)
 psycopg[binary]>=3.2,<4   # PostgreSQL driver (production database)
 cryptography>=42,<50      # encrypts the SMTP password stored in Settings
+Pillow>=11,<13            # image validation/resizing for host photo uploads

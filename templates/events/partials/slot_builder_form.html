@@ -1,0 +1,212 @@
+{% comment %}
+Day-based slot builder. The days listed are this event's own dates (derived
+from Event.event_dates(), so the builder auto-syncs with the event schedule),
+the meeting pattern is set once, and several break windows can be kept clear.
+A live preview counts what the current settings would create before the
+admin commits to them.
+{% endcomment %}
+<form method="post" action="{% url 'events:slot_build' event.pk %}"
+      hx-post="{% url 'events:slot_build' event.pk %}" hx-target="#slot-section" hx-swap="outerHTML"
+      class="inline-form" id="slot-builder-form" data-hosts="{{ host_count|default:0 }}">
+  {% csrf_token %}
+  <h3 style="margin:0 0 4px;">Build the schedule</h3>
+  <p class="helptext" style="margin:0 0 16px;">
+    Tick days from this event's calendar and set the meeting pattern once — every host you choose gets it.
+    Slots that already exist are left alone, so it is safe to run again after adding a host.
+    New slots inherit this event's {% if event.is_online %}video-call details{% else %}venue details{% endif %}.
+  </p>
+
+  {% if not host_count %}
+    <div class="note note-locked" style="margin-bottom:0;">
+      <strong>Add a host first.</strong>
+      Slots belong to a host, so there is nothing to build until this event has at
+      least one active host.
+    </div>
+    <div class="actions" style="margin-top:14px;">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('form').remove()">Close</button>
+    </div>
+  {% else %}
+    {% if form.non_field_errors %}
+      <ul class="errorlist nonfield">
+        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+
+    {# Step 1 — who this pattern is for. #}
+    <div class="field">
+      <label for="{{ form.host.id_for_label }}">{{ form.host.label }}</label>
+      {{ form.host }}
+      <span class="helptext">{{ form.host.help_text }}</span>
+      {{ form.host.errors }}
+    </div>
+
+    {# Step 2 — which of the event's days to build. #}
+    <div class="field">
+      <label>{{ form.days.label }}</label>
+      <div class="check-list">
+        {% for value, label in form.days.field.choices %}
+        <label class="check-option" for="{{ form.days.auto_id }}_{{ forloop.counter0 }}">
+          <input type="checkbox" name="{{ form.days.html_name }}"
+                 id="{{ form.days.auto_id }}_{{ forloop.counter0 }}"
+                 value="{{ value }}"{% if form.days.value and value in form.days.value %} checked{% endif %}>
+          {{ label }}
+        </label>
+        {% endfor %}
+      </div>
+      <span class="helptext">{{ form.days.help_text }}</span>
+      {{ form.days.errors }}
+    </div>
+
+    {# Step 3 — the day pattern. #}
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.start_time.id_for_label }}">{{ form.start_time.label }}</label>
+        {{ form.start_time }}
+        {{ form.start_time.errors }}
+      </div>
+      <div class="field">
+        <label for="{{ form.end_time.id_for_label }}">{{ form.end_time.label }}</label>
+        {{ form.end_time }}
+        <span class="helptext">{{ form.end_time.help_text }}</span>
+        {{ form.end_time.errors }}
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.duration_minutes.id_for_label }}">{{ form.duration_minutes.label }}</label>
+        {{ form.duration_minutes }}
+        <span class="helptext">{{ form.duration_minutes.help_text }}</span>
+        {{ form.duration_minutes.errors }}
+      </div>
+      <div class="field">
+        <label for="{{ form.capacity.id_for_label }}">{{ form.capacity.label }}</label>
+        {{ form.capacity }}
+        <span class="helptext">{{ form.capacity.help_text }}</span>
+        {{ form.capacity.errors }}
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.gap_minutes.id_for_label }}">{{ form.gap_minutes.label }}</label>
+        {{ form.gap_minutes }}
+        <span class="helptext">{{ form.gap_minutes.help_text }}</span>
+        {{ form.gap_minutes.errors }}
+      </div>
+    </div>
+
+    {# Step 4 — breaks: add as many windows as the day needs. #}
+    <div class="field">
+      <label>Breaks <span class="muted" style="font-weight:400;">(optional)</span></label>
+      <div class="builder-breaks">
+        {% for row in form.break_rows %}
+        <div class="break-row"{% if not row.filled and not forloop.first %} hidden{% endif %}>
+          <div class="field">
+            <label for="{{ row.start.id_for_label }}">{{ row.start.label }}</label>
+            {{ row.start }}
+            {{ row.start.errors }}
+          </div>
+          <div class="field">
+            <label for="{{ row.end.id_for_label }}">{{ row.end.label }}</label>
+            {{ row.end }}
+            {{ row.end.errors }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div style="margin-top:8px;">
+        <button type="button" class="btn btn-sm btn-ghost" id="builder-add-break">+ Add a break</button>
+      </div>
+      <div class="field field-check" style="margin-top:10px;">
+        <label for="{{ form.mark_breaks.id_for_label }}">{{ form.mark_breaks }} {{ form.mark_breaks.label }}</label>
+        <span class="helptext">{{ form.mark_breaks.help_text }}</span>
+        {{ form.mark_breaks.errors }}
+      </div>
+    </div>
+
+    {# Live preview — tells the admin what they are about to create. #}
+    <p class="note" id="builder-preview" style="margin-bottom:0;" aria-live="polite"></p>
+
+    <div class="actions">
+      <button type="submit" class="btn btn-secondary">Build schedule</button>
+      <button type="button" class="btn btn-ghost" onclick="this.closest('form').remove()">Cancel</button>
+    </div>
+  {% endif %}
+</form>
+
+<script>
+(function () {
+  var form = document.getElementById('slot-builder-form');
+  if (!form) return;
+  var out = form.querySelector('#builder-preview');
+  var addBtn = form.querySelector('#builder-add-break');
+
+  // --- add-another-break rows (blank rows are ignored by the server) -------
+  if (addBtn) {
+    addBtn.addEventListener('click', function () {
+      var next = form.querySelector('.break-row[hidden]');
+      if (next) next.hidden = false;
+      if (!form.querySelector('.break-row[hidden]')) addBtn.disabled = true;
+      update();
+    });
+    if (!form.querySelector('.break-row[hidden]')) addBtn.disabled = true;
+  }
+
+  var f = function (name) { return form.querySelector('[name="' + name + '"]'); };
+
+  function minutes(value) {
+    var parts = (value || '').split(':');
+    if (parts.length < 2) return null;
+    return (parseInt(parts[0], 10) * 60) + parseInt(parts[1], 10);
+  }
+
+  function update() {
+    if (!out) return;
+    var days = form.querySelectorAll('[name="days"]:checked').length;
+    var hostField = f('host');
+    var hosts = hostField && hostField.value ? 1 : (parseInt(form.dataset.hosts, 10) || 0);
+    var start = minutes(f('start_time').value), end = minutes(f('end_time').value);
+    var each = parseInt(f('duration_minutes').value, 10);
+    if (!days) { out.textContent = 'Tick at least one day.'; return; }
+    if (start === null || end === null || !each) {
+      out.textContent = 'Set the day window and slot length to see how many slots this creates.'; return;
+    }
+    if (end <= start) { out.textContent = 'The day has to end after it starts.'; return; }
+
+    // Collect the break windows the way the server does (blank rows skipped).
+    var windows = [];
+    form.querySelectorAll('.break-row').forEach(function (row) {
+      var s = minutes(row.querySelector('[name^="break_start_"]').value);
+      var e = minutes(row.querySelector('[name^="break_end_"]').value);
+      if (s !== null && e !== null && e > s) windows.push([s, e]);
+    });
+
+    // Walk the day exactly the way the server does, so the count matches.
+    var perDay = 0, t = start;
+    while (t + each <= end) {
+      var hit = null;
+      for (var i = 0; i < windows.length; i++) {
+        if (t < windows[i][1] && t + each > windows[i][0]) { hit = windows[i]; break; }
+      }
+      if (hit) { t = hit[1]; continue; }
+      perDay++; t += each + (parseInt(f('gap_minutes').value, 10) || 0);
+    }
+    if (perDay < 1) { out.textContent = 'No slots fit — the day is too short for that slot length.'; return; }
+
+    var total = perDay * days * hosts;
+    var text = 'Creates about ' + total + ' slot' + (total === 1 ? '' : 's') +
+      ' — ' + perDay + ' per day × ' + days + ' day' + (days === 1 ? '' : 's') +
+      ' × ' + hosts + ' host' + (hosts === 1 ? '' : 's') + '.';
+    if (windows.length) {
+      text += ' ' + windows.length + ' break window' + (windows.length === 1 ? '' : 's') + ' kept clear' +
+        (f('mark_breaks').checked ? ' and shown in the schedule' : '') + '.';
+    }
+    out.textContent = text + ' Existing slots are skipped.';
+  }
+
+  form.addEventListener('input', update);
+  form.addEventListener('change', update);
+  update();
+})();
+</script>

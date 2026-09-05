@@ -5,8 +5,8 @@
 
 <div class="ticket">
   <div class="ticket-head">
-    {% if booking.slot.host.photo_url %}
-      <img class="avatar" src="{{ booking.slot.host.photo_url }}" alt="">
+    {% if booking.slot.host.photo_display_url %}
+      <img class="avatar" src="{{ booking.slot.host.photo_display_url }}" alt="">
     {% else %}
       <div class="avatar">{{ booking.slot.host.name|slice:":1"|upper|default:"?" }}</div>
     {% endif %}

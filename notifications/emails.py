@@ -123,6 +123,44 @@ def send_booking_confirmation(booking, *, is_reschedule=False):
     )
 
 
+def send_booking_confirmation_to_host(booking, *, is_reschedule=False):
+    """New (or moved) booking notice to the HOST — with the join link.
+
+    Visitors get the confirmation email with their manage link; the host gets
+    the same meeting details (join link for online, venue for offline) so both
+    parties always know where the meeting happens.
+    """
+    when, duration = _fmt_slot(booking)
+    slot = booking.slot
+    context = {
+        "booking": booking,
+        "slot": slot,
+        "host": slot.host,
+        "event": booking.event,
+        "when": when,
+        "duration": duration,
+        "is_reschedule": is_reschedule,
+        "google_calendar_url": google_calendar_url(booking),
+        "outlook_calendar_url": outlook_calendar_url(booking),
+        **_meeting_context(booking),
+    }
+    ntype = NotificationLog.TYPE_RESCHEDULE if is_reschedule else NotificationLog.TYPE_CONFIRMATION
+    subject = (
+        f"Moved: your meeting with {booking.visitor_name} — {booking.event.name}"
+        if is_reschedule
+        else f"New booking: {booking.visitor_name} — {when}"
+    )
+    return _deliver(
+        template_base="host_confirmation",
+        context=context,
+        subject=subject,
+        to=slot.host.email,
+        notification_type=ntype,
+        booking=booking,
+        meta="host-reschedule" if is_reschedule else "host-confirmation",
+    )
+
+
 def send_reminder(booking, hours_before):
     """FR-5.2 — reminder email N hours before the meeting."""
     when, duration = _fmt_slot(booking)
@@ -264,7 +302,13 @@ def retry_failed_emails():
         booking = log.booking
         result = None
         if booking is not None:
-            if log.type == NotificationLog.TYPE_CONFIRMATION:
+            if str(log.meta or "").startswith("host-"):
+                # Host-side notice — retry with the host variant so the
+                # visitor is never spammed by a host-delivery failure.
+                result = send_booking_confirmation_to_host(
+                    booking, is_reschedule=(log.meta == "host-reschedule")
+                )
+            elif log.type == NotificationLog.TYPE_CONFIRMATION:
                 result = send_booking_confirmation(booking)
             elif log.type == NotificationLog.TYPE_RESCHEDULE:
                 result = send_booking_confirmation(booking, is_reschedule=True)

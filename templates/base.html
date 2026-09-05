@@ -18,6 +18,7 @@
   <nav class="topnav">
     <a href="{% url 'core:dashboard' %}"{% if ns == 'core' %} class="is-active"{% endif %}>Dashboard</a>
     <a href="{% url 'events:list' %}"{% if ns == 'events' %} class="is-active"{% endif %}>Events</a>
+    <a href="{% url 'events_people:list' %}"{% if ns == 'events_people' %} class="is-active"{% endif %}>People</a>
     <a href="{% url 'bookings_admin:admin_list' %}"{% if ns == 'bookings_admin' %} class="is-active"{% endif %}>Bookings</a>
     <a href="{% url 'notifications:list' %}"{% if ns == 'notifications' %} class="is-active"{% endif %}>Notifications</a>
     <a href="{% url 'audit:list' %}"{% if ns == 'audit' %} class="is-active"{% endif %}>Audit log</a>

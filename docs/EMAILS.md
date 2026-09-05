@@ -1,9 +1,9 @@
 # Working with emails in TravelDoor Connect
 
 Everything outbound — confirmations to bookers (visitors), reminders,
-cancellations, admin-account welcome mails — flows through one small pipeline
-in the `notifications` app. This guide covers how it works, how to turn real
-sending on, how to verify it, and how to debug it.
+cancellations, admin-account welcome mails, password-reset mails — flows
+through one small pipeline in the `notifications` app. This guide covers how
+it works, how to turn real sending on, how to verify it, and how to debug it.
 
 ## TL;DR — does email sending work?
 

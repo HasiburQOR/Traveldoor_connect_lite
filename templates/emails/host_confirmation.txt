@@ -1,0 +1,18 @@
+Hi {{ host.name }},
+
+{% if is_reschedule %}Your meeting was MOVED to a new time.{% else %}You have a NEW meeting booked.{% endif %}
+{% if is_online %}This is a video call - the join link is below.{% else %}This is an in-person meeting. Full address details are below.{% endif %}
+
+  Visitor:   {{ booking.visitor_name }} ({{ booking.visitor_email }}){% if booking.company %} - {{ booking.company }}{% endif %}
+  Event:     {{ event.name }}
+  When:      {{ when }}
+  Duration:  {{ duration }}
+{% include "emails/_where_rows.txt" %}
+{% if booking.visitor_phone %}  Phone:     {{ booking.visitor_phone }}
+{% endif %}{% if booking.notes %}  Notes:     {{ booking.notes }}
+{% endif %}
+Add to calendar:
+  Google Calendar: {{ google_calendar_url }}
+  Outlook:         {{ outlook_calendar_url }}
+
+{{ company_name }} Connect

@@ -1,5 +1,5 @@
 """Audit views — filterable, strictly read-only log (FR-9.2, FR-9.4)."""
-from django.contrib.admin.views.decorators import staff_member_required
+from core.decorators import staff_member_required  # app login page, not the Django admin
 from django.shortcuts import render
 
 from core.pagination import paginate, querystring_without_page

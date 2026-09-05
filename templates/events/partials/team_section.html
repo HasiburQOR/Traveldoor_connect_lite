@@ -1,13 +1,20 @@
 <div class="card" id="team-section">
   <div class="card-head">
     <h2>Hosts</h2>
-    <button class="btn btn-sm btn-secondary" hx-get="{% url 'events:team_add' event.pk %}"
-            hx-target="#team-form" hx-swap="innerHTML show:#team-form:top">Add host</button>
+    <div class="actions" style="margin-top:0;">
+      <a class="btn btn-sm btn-ghost" href="{% url 'events_people:list' %}" target="_blank" rel="noopener">Manage people</a>
+      <button class="btn btn-sm btn-secondary" hx-get="{% url 'events:team_add' event.pk %}"
+              hx-target="#team-form" hx-swap="innerHTML show:#team-form:top">Add hosts</button>
+    </div>
   </div>
 
-  {# An open (or rejected) form lives here, inside the swap target. #}
+  {# An open (or rejected) form lives here, inside the swap target:
+     the picker when adding, the detail form when editing a host. #}
   <div id="team-form">
-    {% if form %}{% include "events/partials/team_form.html" with form=form member=member %}{% endif %}
+    {% if form %}
+      {% if member %}{% include "events/partials/team_form.html" with form=form member=member %}
+      {% else %}{% include "events/partials/team_pick_form.html" with form=form %}{% endif %}
+    {% endif %}
   </div>
 
   <div class="table-wrap">
@@ -37,6 +44,11 @@
           </td>
           <td>{% if m.is_active %}<span class="pill pill-teal">Active</span>{% else %}<span class="pill pill-neutral">Removed</span>{% endif %}</td>
           <td><div class="row-actions">
+            {# Per-host shortcut: opens the builder with this host preselected. #}
+            {% if m.is_active %}
+            <button type="button" class="btn btn-sm btn-ghost" hx-get="{% url 'events:slot_build' event.pk %}?host={{ m.pk }}"
+                    hx-target="#slot-form" hx-swap="innerHTML show:#slot-form:top">Schedule</button>
+            {% endif %}
             <button type="button" class="btn btn-sm btn-ghost" hx-get="{% url 'events:team_edit' event.pk m.pk %}"
                     hx-target="#team-form" hx-swap="innerHTML show:#team-form:top">Edit</button>
             {% if m.is_active %}
@@ -59,7 +71,7 @@
           </div></td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="empty-row muted">No hosts yet — add one before creating slots.</td></tr>
+        <tr><td colspan="7" class="empty-row muted">No hosts yet — open “Add hosts” and pick people from the directory.</td></tr>
         {% endfor %}
       </tbody>
     </table>

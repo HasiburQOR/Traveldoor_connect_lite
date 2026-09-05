@@ -1,0 +1,38 @@
+<form method="post"
+      action="{% url 'events:team_add' event.pk %}"
+      hx-post="{% url 'events:team_add' event.pk %}"
+      hx-target="#team-section" hx-swap="outerHTML" class="inline-form">
+  {% csrf_token %}
+  <h3 style="margin:0 0 14px;">Add hosts</h3>
+  <div class="field">
+    <label>{{ form.people.label }}</label>
+    {% if form.people.field.queryset %}
+      <p class="helptext" style="margin:-6px 0 12px;">
+        Tick the people who will host at this event — their details are copied from the
+        <a href="{% url 'events_people:list' %}" target="_blank" rel="noopener">People directory</a>
+        and can still be tweaked per event afterwards.
+      </p>
+      <div class="check-list">
+        {% for option in form.people %}
+          <label class="check-option">{{ option.tag }} <span>{{ option.choice_label }}</span></label>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="helptext" style="margin:0 0 12px;">
+        No one left to pick — everyone in the
+        <a href="{% url 'events_people:list' %}" target="_blank" rel="noopener">People directory</a>
+        is already hosting this event (or the directory is empty). Add people there first,
+        then open this picker again.
+      </p>
+    {% endif %}
+    {{ form.people.errors }}
+  </div>
+  <div class="actions" style="margin-top:6px;">
+    {% if form.people.field.queryset %}
+      <button type="submit" class="btn btn-secondary">Add selected as hosts</button>
+    {% else %}
+      <a class="btn btn-secondary" href="{% url 'events_people:create' %}" target="_blank" rel="noopener">Add a person</a>
+    {% endif %}
+    <button type="button" class="btn btn-ghost" onclick="this.closest('form').remove()">Cancel</button>
+  </div>
+</form>

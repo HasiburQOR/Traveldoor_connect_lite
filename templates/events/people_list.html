@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}People — TravelDoor Connect{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>People</h1>
+    <p class="sub">Your host directory — manage people and their details once, then pick them as hosts on any event.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{% url 'events_people:create' %}">New person</a>
+  </div>
+</div>
+
+<div class="card">
+  {% include "events/partials/people_table.html" %}
+</div>
+{% endblock %}

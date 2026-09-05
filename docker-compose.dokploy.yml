@@ -29,6 +29,10 @@ services:
       DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,testserver}"
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://127.0.0.1:8000}"
       DJANGO_CSRF_TRUSTED_ORIGINS: "${DJANGO_CSRF_TRUSTED_ORIGINS:-}"
+      DJANGO_MEDIA_ROOT: /app/media
+    volumes:
+      # Uploaded host photos must survive redeploys — keep them on a volume.
+      - media_data:/app/media
     restart: unless-stopped
     # Dokploy's managed databases and the Traefik reverse proxy live on the
     # shared dokploy-network — join it so DATABASE_URL hostnames resolve and
@@ -49,12 +53,18 @@ services:
       DJANGO_DEBUG: "${DJANGO_DEBUG:-false}"
       DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,testserver}"
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://127.0.0.1:8000}"
+      DJANGO_MEDIA_ROOT: /app/media
+    volumes:
+      - media_data:/app/media
     depends_on:
       web:
         condition: service_healthy
     restart: unless-stopped
     networks:
       - dokploy-network
+
+volumes:
+  media_data:
 
 networks:
   # External network created by Dokploy itself. The web/scheduler services

@@ -170,7 +170,11 @@ class FullSurfaceWalkTest(TestCase):
             self.assertTrue(
                 Booking.objects.filter(visitor_email=f"nino-{event_type}@example.com").exists()
             )
-            self.assertEqual(len(mail.outbox), 1, "confirmation email sent")
+            self.assertEqual(len(mail.outbox), 2, "visitor + host confirmation emails sent")
+            self.assertEqual(
+                {m.to[0] for m in mail.outbox},
+                {f"nino-{event_type}@example.com", fx["host"].email},
+            )
 
     def test_booking_flow_degrades_without_htmx(self):
         """No JS: the booking URL must serve a full styled page, not a fragment."""
@@ -262,7 +266,7 @@ class FullSurfaceWalkTest(TestCase):
                 "team edit form": reverse("events:team_edit", args=[event.pk, host.pk]),
                 "slot add form": reverse("events:slot_add", args=[event.pk]),
                 "slot edit form": reverse("events:slot_edit", args=[event.pk, slots[0].pk]),
-                "slot bulk form": reverse("events:slot_bulk", args=[event.pk]),
+                "slot build form": reverse("events:slot_build", args=[event.pk]),
             }
             for name, url in fragments.items():
                 html = self.get(url, HTTP_HX_REQUEST="true")
@@ -364,8 +368,8 @@ class FullSurfaceWalkTest(TestCase):
 
         cases = [
             # end time before start time
-            (reverse("events:slot_bulk", args=[event.pk]), {
-                "date_from": self.day.isoformat(), "date_to": self.day.isoformat(),
+            (reverse("events:slot_build", args=[event.pk]), {
+                "host": "", "days": [self.day.isoformat()],
                 "start_time": "14:15", "end_time": "12:32",
                 "duration_minutes": "30", "capacity": "1"},
              "slot-section"),
@@ -388,25 +392,28 @@ class FullSurfaceWalkTest(TestCase):
             self.assertIn("errorlist", html, f"{url} lost the validation message")
             self.assertIn("<form", html, f"{url} lost the form the user was filling in")
 
-    def test_bulk_form_prefills_the_event_window(self):
-        """Empty date/time inputs are how you get an end-before-start window."""
+    def test_builder_form_prefills_a_working_day(self):
+        """Empty time inputs are how you get an end-before-start day."""
         self.client.force_login(self.admin)
         event = self.offline["event"]
-        html = self.get(reverse("events:slot_bulk", args=[event.pk]), HTTP_HX_REQUEST="true")
-        self.assertIn(f'value="{event.start_date.isoformat()}"', html)
-        self.assertIn(f'value="{event.end_date.isoformat()}"', html)
+        html = self.get(reverse("events:slot_build", args=[event.pk]), HTTP_HX_REQUEST="true")
         self.assertIn('value="09:00"', html)
         self.assertIn('value="17:00"', html)
-        # Pickers are constrained to the event window.
-        self.assertIn(f'min="{event.start_date.isoformat()}"', html)
-        self.assertIn(f'max="{event.end_date.isoformat()}"', html)
+        # The host dropdown defaults to the whole team and lists every host.
+        self.assertIn("Every active host", html)
+        self.assertIn("Hasibur Rahman", html)
+        # Only the event's own days are offered — one checkbox per date, and
+        # nothing beyond the event's window can even be submitted.
+        for d in event.event_dates():
+            self.assertIn(f'value="{d.isoformat()}"', html)
+        outside = (event.end_date + datetime.timedelta(days=1)).isoformat()
+        self.assertNotIn(f'value="{outside}"', html)
 
-    def test_bulk_form_attaches_errors_to_the_offending_field(self):
+    def test_builder_form_attaches_errors_to_the_offending_field(self):
         self.client.force_login(self.admin)
         event = self.offline["event"]
-        response = self.client.post(reverse("events:slot_bulk", args=[event.pk]), {
-            "date_from": event.start_date.isoformat(),
-            "date_to": event.start_date.isoformat(),
+        response = self.client.post(reverse("events:slot_build", args=[event.pk]), {
+            "host": "", "days": [event.start_date.isoformat()],
             "start_time": "14:15", "end_time": "12:32",
             "duration_minutes": "30", "capacity": "1",
         }, HTTP_HX_REQUEST="true")
@@ -418,40 +425,39 @@ class FullSurfaceWalkTest(TestCase):
         self.assertNotIn("errorlist nonfield", html)
         self.assertIn('id="slot-section"', html)
 
-    def test_bulk_form_rejects_a_window_outside_the_event(self):
+    def test_builder_form_rejects_a_day_the_event_doesnt_run(self):
         self.client.force_login(self.admin)
         event = self.offline["event"]
         outside = (event.end_date + datetime.timedelta(days=10)).isoformat()
-        response = self.client.post(reverse("events:slot_bulk", args=[event.pk]), {
-            "date_from": event.start_date.isoformat(), "date_to": outside,
+        response = self.client.post(reverse("events:slot_build", args=[event.pk]), {
+            "host": "", "days": [outside],
             "start_time": "09:00", "end_time": "17:00",
             "duration_minutes": "30", "capacity": "1",
         }, HTTP_HX_REQUEST="true")
-        self.assertIn("finishes on", response.content.decode())
+        self.assertIn("Select a valid choice", response.content.decode())
         self.assertFalse(Slot.objects.filter(event=event, date__gte=outside).exists())
 
-    def test_bulk_form_explains_when_there_are_no_hosts(self):
+    def test_builder_form_explains_when_there_are_no_hosts(self):
         self.client.force_login(self.admin)
         event = Event.objects.create(
             name="Hostless", start_date=self.day, duration_days=2,
             event_type=Event.TYPE_ONLINE, default_video_provider=Event.PROVIDER_ZOOM,
             default_meeting_link=LINK,
         )
-        html = self.get(reverse("events:slot_bulk", args=[event.pk]), HTTP_HX_REQUEST="true")
+        html = self.get(reverse("events:slot_build", args=[event.pk]), HTTP_HX_REQUEST="true")
         self.assertIn("Add a host first", html)
-        self.assertNotIn("Generate slots", html)
+        self.assertNotIn("Build schedule", html)
 
-    def test_bulk_generation_still_works(self):
+    def test_builder_still_works(self):
         self.client.force_login(self.admin)
         event = self.offline["event"]
         before = event.slots.count()
-        self.client.post(reverse("events:slot_bulk", args=[event.pk]), {
-            "date_from": event.start_date.isoformat(),
-            "date_to": event.start_date.isoformat(),
+        self.client.post(reverse("events:slot_build", args=[event.pk]), {
+            "host": "", "days": [event.start_date.isoformat()],
             "start_time": "09:00", "end_time": "10:00",
             "duration_minutes": "30", "capacity": "1",
         }, HTTP_HX_REQUEST="true")
-        self.assertEqual(event.slots.count(), before + 2, "two 30-min slots in a 1-hour window")
+        self.assertEqual(event.slots.count(), before + 2, "two 30-min slots in a 1-hour day")
 
     def test_in_app_notification_component_matches_the_event_type(self):
         self.client.force_login(self.admin)
@@ -736,7 +742,9 @@ class ReminderVisibilityTest(TestCase):
 
         mail.outbox.clear()
         self.client.post(reverse("bookings_admin:admin_resend", args=[self.booking.pk]))
-        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(len(mail.outbox), 2, "visitor + host confirmation re-sent")
+        self.assertEqual({m.to[0] for m in mail.outbox},
+                         {"a@example.com", "h@example.com"})
         self.assertTrue(AuditLogEntry.objects.filter(
             entity_id=self.booking.pk, details__icontains="re-sent").exists())
 

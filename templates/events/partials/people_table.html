@@ -1,0 +1,38 @@
+{# The directory table — swapped in place by htmx when a person is deleted. #}
+<div class="table-wrap" id="people-table">
+  <table class="grid">
+    <thead>
+      <tr><th>Person</th><th>Role</th><th>Email</th><th>Login</th><th>Hosting</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for p in people %}
+      <tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            {% if p.photo_display_url %}
+              <img src="{{ p.photo_display_url }}" alt=""
+                   style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex:0 0 auto;">
+            {% endif %}
+            <strong>{{ p.name }}</strong>
+          </div>
+        </td>
+        <td>{{ p.role|default:"—" }}</td>
+        <td>{{ p.email }}</td>
+        <td class="muted">{{ p.linked_user.username|default:"—" }}</td>
+        <td>{{ p.host_count }} event{{ p.host_count|pluralize }}</td>
+        <td>{% if p.is_active %}<span class="pill pill-teal">Available</span>{% else %}<span class="pill pill-neutral">Inactive</span>{% endif %}</td>
+        <td><div class="row-actions">
+          <a class="btn btn-sm btn-ghost" href="{% url 'events_people:edit' p.pk %}">Edit</a>
+          <form class="inline" method="post" action="{% url 'events_people:delete' p.pk %}"
+                hx-post="{% url 'events_people:delete' p.pk %}" hx-target="#people-table" hx-swap="outerHTML"
+                hx-confirm="Remove {{ p.name }} from the directory? Host records already added to events keep their details.">
+            {% csrf_token %}<button class="btn btn-sm btn-danger">Delete</button>
+          </form>
+        </div></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="empty-row muted">No people yet — add your first one, then pick them as hosts when setting up an event.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

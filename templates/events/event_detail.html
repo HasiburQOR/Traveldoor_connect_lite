@@ -41,6 +41,23 @@
   <div class="stat"><div class="n">{{ summary.days_left }}</div><div class="label">Days left</div></div>
 </div>
 
+{% if event.duration_days > 1 or event.runs_selected_days %}
+{# The exact dates the event runs on — weekday gaps inside the window show as free. #}
+<div class="card">
+  <div class="card-head">
+    <h2>Event days</h2>
+    {% if event.runs_selected_days %}
+      <span class="helptext">Runs {{ event.weekday_summary }} only — other days inside the window stay free.</span>
+    {% endif %}
+  </div>
+  <div class="chip-row" style="margin-top:4px;">
+    {% for d in event_days %}
+      <span class="pill pill-neutral date-chip{% if d.past %} chip-past{% endif %}">{{ d.date|date:"D j M" }}</span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-head"><h2>Meeting details</h2></div>
   <table class="kv">

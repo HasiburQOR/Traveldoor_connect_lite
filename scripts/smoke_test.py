@@ -19,7 +19,7 @@ from django.urls import reverse
 
 from audit.models import AuditLogEntry
 from bookings.models import Booking
-from events.models import Event, Slot, TeamMember
+from events.models import Event, Person, Slot, TeamMember
 from notifications.models import HostNotification, NotificationLog
 
 step = 0
@@ -70,25 +70,27 @@ r = client.get(reverse("events:update", args=[event.pk]))
 check(b'name="venue"' in r.content and b'name="default_meeting_link"' not in r.content,
       "offline edit form shows venue fields and no link field")
 
-# --- 2. Team -----------------------------------------------------------------
+# --- 2. Team (people directory -> host picker) --------------------------------
+for name, email, role in [("Alice Host", "alice@example.com", "Sales Lead"),
+                          ("Bob Host", "bob@example.com", "Engineer")]:
+    client.post(reverse("events_people:create"), {
+        "name": name, "email": email, "role": role,
+        "photo_url": "", "photo": "", "linked_user": "", "is_active": "on",
+    })
 client.post(reverse("events:team_add", args=[event.pk]), {
-    "name": "Alice Host", "email": "alice@example.com", "role": "Sales Lead",
-    "photo_url": "", "linked_user": "", "is_active": "on",
-})
-client.post(reverse("events:team_add", args=[event.pk]), {
-    "name": "Bob Host", "email": "bob@example.com", "role": "Engineer",
-    "photo_url": "", "linked_user": "", "is_active": "on",
+    "people": list(Person.objects.filter(email__in=["alice@example.com",
+                                                    "bob@example.com"]).values_list("pk", flat=True)),
 })
 check(TeamMember.objects.filter(event=event).count() == 2, "two hosts added")
 
-# --- 3. Bulk slots (offline, event venue defaults) ---------------------------
-client.post(reverse("events:slot_bulk", args=[event.pk]), {
-    "date_from": d1.isoformat(), "date_to": d1.isoformat(),
+# --- 3. Build the schedule (offline, event venue defaults) --------------------
+client.post(reverse("events:slot_build", args=[event.pk]), {
+    "host": "", "days": [d1.isoformat()],
     "start_time": "09:00", "end_time": "10:30",
     "duration_minutes": "30", "capacity": "1",
 })
 slots = list(event.slots.order_by("start_time"))
-check(len(slots) == 6, f"bulk generated 6 slots across 2 hosts (got {len(slots)})")
+check(len(slots) == 6, f"builder created 6 slots across 2 hosts (got {len(slots)})")
 check(all(s.mode == "offline" for s in slots), "generated slots inherit the event type")
 check(all(not s.meeting_link for s in slots), "offline slots carry no meeting link")
 check(event.event_type_locked, "event type locks once slots exist")
@@ -242,9 +244,12 @@ check(online.event_type == "online" and online.venue == "",
 r = client.get(reverse("events:update", args=[online.pk]))
 check(b'name="venue"' not in r.content and b'name="default_meeting_link"' in r.content,
       "online edit form shows the link field and no venue fields")
+client.post(reverse("events_people:create"), {
+    "name": "Cara Host", "email": "cara@example.com", "role": "",
+    "photo_url": "", "photo": "", "linked_user": "", "is_active": "on",
+})
 client.post(reverse("events:team_add", args=[online.pk]), {
-    "name": "Cara Host", "email": "cara@example.com", "role": "", "photo_url": "",
-    "linked_user": "", "is_active": "on",
+    "people": [Person.objects.get(email="cara@example.com").pk],
 })
 cara = TeamMember.objects.get(event=online, name="Cara Host")
 r = client.get(reverse("events:slot_add", args=[online.pk]))

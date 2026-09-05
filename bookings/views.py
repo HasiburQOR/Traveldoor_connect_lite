@@ -10,7 +10,7 @@ import csv
 import datetime
 
 from django.contrib import messages
-from django.contrib.admin.views.decorators import staff_member_required
+from core.decorators import staff_member_required  # app login page, not the Django admin
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -23,6 +23,7 @@ from audit.models import AuditLogEntry, log_action
 from events.models import Event, Slot, TeamMember
 from notifications.emails import (
     send_booking_confirmation,
+    send_booking_confirmation_to_host,
     send_cancellation_to_host,
     send_cancellation_to_visitor,
 )
@@ -102,6 +103,7 @@ def public_book(request, slug, slot_pk):
                 form.add_error(None, exc.message)
             else:
                 send_booking_confirmation(booking)  # FR-5.1 (with manage link)
+                send_booking_confirmation_to_host(booking)  # host sees the join link too
                 log_action(None, AuditLogEntry.ACTION_CREATE, booking,
                            details=f"Visitor {booking.visitor_email} booked {booking.slot}.")
                 return respond("public/partials/booking_success.html", {"booking": booking})
@@ -147,6 +149,7 @@ def manage_reschedule(request, token):
         log_action(None, AuditLogEntry.ACTION_RESCHEDULE, new_booking,
                    details=f"Visitor {booking.visitor_email} rescheduled via manage link.")
         send_booking_confirmation(new_booking, is_reschedule=True)  # FR-5.1
+        send_booking_confirmation_to_host(new_booking, is_reschedule=True)
         send_cancellation_to_host(booking, reason="Visitor rescheduled to another slot.")
         messages.success(request, "Your meeting has been moved. A confirmation email is on its way.")
         return redirect("bookings_manage:manage", new_booking.manage_token)
@@ -309,6 +312,7 @@ def booking_resend_confirmation(request, pk):
         Booking.objects.select_related("slot", "slot__host", "event"), pk=pk
     )
     log = send_booking_confirmation(booking)
+    send_booking_confirmation_to_host(booking)
     if log.status == NotificationLog.STATUS_SENT:
         log_action(request.user, AuditLogEntry.ACTION_UPDATE, booking,
                    details=f"Confirmation email re-sent to {booking.visitor_email}.")
@@ -345,6 +349,7 @@ def booking_create(request):
                 log_action(request.user, AuditLogEntry.ACTION_CREATE, booking,
                            details="Booking created by admin on visitor's behalf.")
                 send_booking_confirmation(booking)
+                send_booking_confirmation_to_host(booking)
                 messages.success(request, "Booking created; confirmation email sent.")
                 return redirect("bookings_admin:admin_detail", booking.pk)
     events = Event.objects.filter(status=Event.STATUS_LIVE)
@@ -402,6 +407,7 @@ def booking_reschedule(request, pk):
             log_action(request.user, AuditLogEntry.ACTION_RESCHEDULE, new_booking,
                        details=f"Admin moved booking to {new_booking.slot}.")
             send_booking_confirmation(new_booking, is_reschedule=True)
+            send_booking_confirmation_to_host(new_booking, is_reschedule=True)
             send_cancellation_to_host(booking, reason="Organiser moved this booking to another slot.")
             messages.success(request, "Booking moved — visitor notified.")
             return redirect("bookings_admin:admin_detail", new_booking.pk)

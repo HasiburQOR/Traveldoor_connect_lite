@@ -40,11 +40,201 @@
   <form method="post">
     {% csrf_token %}
     <input type="hidden" name="event_type" value="{{ event_type }}">
-    {% include "partials/form_fields.html" with form=form %}
+    <input type="hidden" name="schedule_present" value="1">
+
+    {% if form.non_field_errors %}
+      <ul class="errorlist nonfield">
+        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+
+    {# --- Schedule block: mode, dates, weekdays, live breakdown ------------- #}
+    <div id="event-schedule">
+      <div class="field">
+        <label>{{ form.schedule_mode.label }}</label>
+        <div class="schedule-modes">
+          {% for radio in form.schedule_mode %}
+            <label class="schedule-mode">{{ radio.tag }} {{ radio.choice_label }}</label>
+          {% endfor %}
+        </div>
+        {{ form.schedule_mode.errors }}
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="{{ form.start_date.id_for_label }}">{{ form.start_date.label }}</label>
+          {{ form.start_date }}
+          {% if form.start_date.help_text %}<span class="helptext">{{ form.start_date.help_text }}</span>{% endif %}
+          {{ form.start_date.errors }}
+        </div>
+        <div class="field" id="count-input">
+          <label for="{{ form.duration_days.id_for_label }}">{{ form.duration_days.label }}</label>
+          {{ form.duration_days }}
+          <span class="helptext">{{ form.duration_days.help_text }}</span>
+          {{ form.duration_days.errors }}
+        </div>
+        <div class="field" id="range-input" hidden>
+          <label for="{{ form.end_date_input.id_for_label }}">{{ form.end_date_input.label }}</label>
+          {{ form.end_date_input }}
+          <span class="helptext">{{ form.end_date_input.help_text }}</span>
+          {{ form.end_date_input.errors }}
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Days of the week the event runs on</label>
+        <div class="weekday-row">
+          {% for box in form.weekday_fields %}
+            <label class="weekday-check">{{ box }} {{ box.label }}</label>
+          {% endfor %}
+        </div>
+        <span class="helptext">Unticked days between the first and last date stay free — tick Sat/Sun to run through weekends.</span>
+      </div>
+
+      {% with preview=form.schedule_preview %}
+        <div class="note" id="schedule-preview" aria-live="polite">
+          {% if preview.no_weekday %}
+            <strong>Tick at least one day of the week.</strong>
+          {% elif preview.none_match %}
+            <strong>None of the selected weekdays fall inside this window</strong> — pick other days or widen the range.
+          {% elif preview.dates %}
+            <strong>{{ preview.dates|length }} event day{{ preview.dates|length|pluralize }}:</strong>
+            <div class="chip-row">
+              {% for d in preview.chips %}<span class="pill pill-neutral date-chip">{{ d|date:"D j M" }}</span>{% endfor %}
+              {% if preview.more %}<span class="helptext" style="display:inline;">+ {{ preview.more }} more</span>{% endif %}
+            </div>
+            {% if preview.free %}<span class="helptext" style="display:block;margin-top:6px;">Free in between: {{ preview.free }}.</span>{% endif %}
+          {% else %}
+            Pick the first day and how long the event runs to see the exact dates here.
+          {% endif %}
+        </div>
+      {% endwith %}
+    </div>
+
+    {% for f in form.other_fields %}
+      {% include "partials/field.html" with f=f %}
+    {% endfor %}
     <div class="actions">
       <button type="submit" class="btn btn-primary">Save event</button>
       <a class="btn btn-ghost" href="{% if event %}{% url 'events:detail' event.pk %}{% else %}{% url 'events:list' %}{% endif %}">Cancel</a>
     </div>
   </form>
+  <script>
+  (function () {
+    var root = document.getElementById('event-schedule');
+    if (!root) return;
+    var out = document.getElementById('schedule-preview');
+    var f = function (name) { return root.querySelector('[name="' + name + '"]'); };
+    var modes = root.querySelectorAll('[name="schedule_mode"]');
+    var countBox = document.getElementById('count-input');
+    var rangeBox = document.getElementById('range-input');
+    var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    var MAX_CHIPS = 42;
+
+    function mode() {
+      for (var i = 0; i < modes.length; i++) { if (modes[i].checked) return modes[i].value; }
+      return 'count';
+    }
+    function parse(v) { return v ? new Date(v + 'T00:00:00') : null; }
+    function chip(d) {
+      var s = document.createElement('span');
+      s.className = 'pill pill-neutral date-chip';
+      s.textContent = DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
+      return s;
+    }
+
+    function update() {
+      var m = mode();
+      countBox.hidden = m !== 'count';
+      rangeBox.hidden = m !== 'range';
+
+      var start = parse(f('start_date').value);
+      var end = null;
+      if (m === 'range') {
+        end = parse(f('end_date_input').value);
+      } else {
+        var days = parseInt(f('duration_days').value, 10);
+        if (start && days > 0) end = new Date(start.getTime() + (days - 1) * 86400000);
+      }
+      // weekday_N checkboxes are Monday-based; JS getDay() is Sunday-based.
+      var checked = [];
+      for (var d = 0; d < 7; d++) {
+        var box = f('weekday_' + d);
+        if (box && box.checked) checked.push((d + 1) % 7);
+      }
+      if (!checked.length) {
+        out.innerHTML = '<strong>Tick at least one day of the week.</strong>';
+        return;
+      }
+      if (!start || !end) {
+        out.textContent = 'Pick the first day and how long the event runs to see the exact dates here.';
+        return;
+      }
+      if (end < start) {
+        out.textContent = 'The last day is before the first day.';
+        return;
+      }
+
+      // Walk the span exactly the way the server does.
+      var dates = [], freeRuns = [], runStart = null, prev = null;
+      var cur = new Date(start.getTime());
+      while (cur <= end) {
+        var wd = cur.getDay();
+        if (checked.indexOf(wd) >= 0) {
+          dates.push(new Date(cur.getTime()));
+          if (runStart) { freeRuns.push([runStart, prev]); runStart = null; }
+        } else if (wd === 5 || wd === 6 || wd === 0) {  // Fri/Sat/Sun gaps
+          if (!runStart) runStart = new Date(cur.getTime());
+        } else if (runStart) {
+          freeRuns.push([runStart, prev]); runStart = null;
+        }
+        prev = new Date(cur.getTime());
+        cur.setDate(cur.getDate() + 1);
+      }
+      if (runStart) freeRuns.push([runStart, prev]);
+
+      out.textContent = '';
+      if (!dates.length) {
+        out.innerHTML = '<strong>None of the selected weekdays fall inside this window</strong> — pick other days or widen the range.';
+        return;
+      }
+      var head = document.createElement('strong');
+      head.textContent = dates.length + ' event day' + (dates.length === 1 ? '' : 's') + ':';
+      out.appendChild(head);
+      var row = document.createElement('div');
+      row.className = 'chip-row';
+      for (var i = 0; i < Math.min(dates.length, MAX_CHIPS); i++) row.appendChild(chip(dates[i]));
+      if (dates.length > MAX_CHIPS) {
+        var more = document.createElement('span');
+        more.className = 'helptext';
+        more.style.display = 'inline';
+        more.textContent = '+ ' + (dates.length - MAX_CHIPS) + ' more';
+        row.appendChild(more);
+      }
+      out.appendChild(row);
+      var freeBits = [];
+      for (var r = 0; r < freeRuns.length; r++) {
+        var a = freeRuns[r][0], b = freeRuns[r][1];
+        freeBits.push(a.getDate() + ' ' + MONTHS[a.getMonth()] + (b > a ? '–' + b.getDate() + ' ' + MONTHS[b.getMonth()] : ''));
+      }
+      if (freeBits.length) {
+        var free = document.createElement('span');
+        free.className = 'helptext';
+        free.style.display = 'block';
+        free.style.marginTop = '6px';
+        free.textContent = 'Free in between: ' + freeBits.join(', ') + '.';
+        out.appendChild(free);
+      }
+    }
+
+    root.addEventListener('input', update);
+    root.addEventListener('change', update);
+    f('start_date').addEventListener('input', function () {
+      f('end_date_input').min = this.value;
+    });
+    update();
+  })();
+  </script>
 </div>
 {% endblock %}

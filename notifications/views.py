@@ -1,5 +1,5 @@
 """In-app host notification views (FR-6.3)."""
-from django.contrib.admin.views.decorators import staff_member_required
+from core.decorators import staff_member_required  # app login page, not the Django admin
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 

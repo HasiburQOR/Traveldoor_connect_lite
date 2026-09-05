@@ -1,6 +1,6 @@
 """Core views — the admin dashboard (FR-8.3) and a health endpoint."""
 from django.contrib import messages
-from django.contrib.admin.views.decorators import staff_member_required
+from core.decorators import staff_member_required  # app login page, not the Django admin
 from django.contrib.auth.decorators import user_passes_test
 from django.db.models import Count
 from django.http import JsonResponse
