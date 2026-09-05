@@ -11,11 +11,13 @@ from core.decorators import staff_member_required  # app login page, not the Dja
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from audit.models import AuditLogEntry, log_action
 from bookings.models import Booking
+from core.runtime import public_base_url
 from notifications.emails import send_attention_email
 from notifications.jobs import close_expired_events
 from notifications.models import HostNotification
@@ -83,7 +85,8 @@ def event_list(request):
             filter=Q(bookings__status=Booking.STATUS_CONFIRMED),
         ),
     )
-    return render(request, "events/event_list.html", {"events": events})
+    return render(request, "events/event_list.html",
+                  {"events": events, "base_url": public_base_url()})
 
 
 @staff_member_required
@@ -168,6 +171,12 @@ def event_detail(request, pk):
             pass
     context = {
         "event": event,
+        # Full shareable URL (domain included) — same source emails build their
+        # links from, so the row shows exactly what a visitor receives.
+        "public_url": (
+            public_base_url() + reverse("bookings_public:public_event", args=[event.public_slug])
+            if event.public_slug else ""
+        ),
         "event_days": [{"date": d, "past": d < today} for d in event_days],
         "day_chips": day_chips,
         "selected_date": selected_date,

@@ -39,7 +39,7 @@
           <td><span class="pill {{ event.status }}">{{ event.get_status_display }}</span></td>
           <td>
             {% if event.public_slug %}
-              <a href="{% url 'bookings_public:public_event' event.public_slug %}" class="mono">/b/{{ event.public_slug }}/</a>
+              <a href="{{ base_url }}/b/{{ event.public_slug }}/" class="mono">{{ base_url }}/b/{{ event.public_slug }}/</a>
             {% else %}<span class="muted">Not published</span>{% endif %}
           </td>
           <td><div class="row-actions">

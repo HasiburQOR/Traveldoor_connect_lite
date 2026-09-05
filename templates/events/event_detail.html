@@ -73,8 +73,11 @@
     {% endif %}
     <tr><th>Public link</th><td>
       {% if event.public_slug %}
-        <a class="mono" href="{% url 'bookings_public:public_event' event.public_slug %}">{% url 'bookings_public:public_event' event.public_slug %}</a>
-        {% if event.status != "live" %}<span class="helptext">Visitors currently see a closed page until the event is live.</span>{% endif %}
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <a class="mono" href="{{ public_url }}" target="_blank" rel="noopener">{{ public_url }}</a>
+          <button type="button" class="btn btn-sm btn-secondary" data-copy="{{ public_url }}">Copy link</button>
+        </div>
+        {% if event.status != "live" %}<div class="helptext" style="margin-top:4px;">Visitors currently see a closed page until the event is live.</div>{% endif %}
       {% else %}<span class="muted">Publish the event to generate the shareable link.</span>{% endif %}
     </td></tr>
   </table>
@@ -83,4 +86,33 @@
 {% include "events/partials/team_section.html" %}
 {% include "events/partials/slot_section.html" %}
 {% include "events/partials/booking_section.html" %}
+{% endblock %}
+
+{% block scripts %}
+{# Copy button: copies [data-copy] to the clipboard, flips the label for 2s. #}
+<script>
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-copy]");
+    if (!btn) { return; }
+    var text = btn.getAttribute("data-copy");
+    var label = btn.textContent;
+    var done = function () {
+      btn.textContent = "Copied \u2713";
+      setTimeout(function () { btn.textContent = label; }, 2000);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done);
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      done();
+    }
+  });
+</script>
 {% endblock %}

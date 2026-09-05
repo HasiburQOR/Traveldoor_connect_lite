@@ -706,6 +706,14 @@ class EventScheduleTest(TestCase):
         # Any 7-day window holds exactly five Mon–Fri days.
         self.assertEqual(response.context["summary"]["days_left"], 5)
 
+    @override_settings(PUBLIC_BASE_URL="https://booking.example.com")
+    def test_detail_shows_the_full_public_link_with_copy_button(self):
+        event = self.make_event(public_slug="bike-show-2026")
+        html = self.client.get(reverse("events:detail", args=[event.pk])).content.decode()
+        full = "https://booking.example.com/b/bike-show-2026/"
+        self.assertIn(full, html)                   # domain included, ready to paste
+        self.assertIn(f'data-copy="{full}"', html)  # the copy button carries the same URL
+
     def test_public_page_mentions_the_weekday_summary(self):
         # The public page only renders while the event is live, so anchor it
         # on the next Monday strictly after today.
