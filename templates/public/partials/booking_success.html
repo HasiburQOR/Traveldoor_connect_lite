@@ -25,11 +25,17 @@ inside the same ticket they just filled in.
 </div>
 
 <p style="font-size:13.5px;margin:0 0 6px;">You're booked, {{ booking.visitor_name }}.</p>
-<p style="font-size:13px;color:var(--slate-soft);margin:0 0 8px;">
+<p style="font-size:13px;color:var(--slate-soft);margin:0 0 10px;">
   We've emailed the details to <strong style="color:var(--navy);">{{ booking.visitor_email }}</strong>,
   including a personal link for changing or cancelling this meeting.
   {% if not event.is_online %}Please have that email with you at the venue — it's how we'll check you in.{% endif %}
 </p>
+
+<div role="note" style="background:var(--gold-light);border:1px solid var(--gold-line);border-radius:var(--radius-sm);padding:10px 12px;margin:0 0 14px;font-size:12.5px;line-height:1.5;color:var(--gold-ink);">
+  <strong style="color:var(--gold-ink);">Didn't get it?</strong> Confirmation emails sometimes end up in your
+  <strong style="color:var(--gold-ink);">spam or promotions folder</strong> — please check there and mark the email
+  as “not spam” so you don't miss the meeting details and your personal link.
+</div>
 
 <div class="actions">
   <a class="btn btn-secondary" href="{% url 'bookings_manage:manage' booking.manage_token %}">Manage this booking</a>

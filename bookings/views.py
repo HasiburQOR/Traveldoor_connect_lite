@@ -151,7 +151,8 @@ def manage_reschedule(request, token):
         send_booking_confirmation(new_booking, is_reschedule=True)  # FR-5.1
         send_booking_confirmation_to_host(new_booking, is_reschedule=True)
         send_cancellation_to_host(booking, reason="Visitor rescheduled to another slot.")
-        messages.success(request, "Your meeting has been moved. A confirmation email is on its way.")
+        messages.success(request, "Your meeting has been moved. A confirmation email is on its way — "
+                                  "if it doesn't appear shortly, please check your spam folder.")
         return redirect("bookings_manage:manage", new_booking.manage_token)
     options = [s for s in Slot.public_for_event(booking.event) if s.pk != booking.slot_id]
     return render(request, "manage/reschedule.html", {"booking": booking, "options": options})
