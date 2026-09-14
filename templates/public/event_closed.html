@@ -6,5 +6,8 @@
   <h1>Bookings are closed</h1>
   <p>{{ event.name }} isn't taking new bookings{% if event.is_expired %} — the event has now finished{% endif %}.</p>
   <p>Already have a meeting booked? Use the personal link in your confirmation email to view, move or cancel it.</p>
+  <div class="actions" style="margin-top:14px;">
+    <a class="btn btn-secondary" href="{% url 'bookings_public:public_events' %}">See all events</a>
+  </div>
 </div>
 {% endblock %}

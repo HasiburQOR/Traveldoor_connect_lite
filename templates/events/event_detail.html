@@ -80,6 +80,13 @@
         {% if event.status != "live" %}<div class="helptext" style="margin-top:4px;">Visitors currently see a closed page until the event is live.</div>{% endif %}
       {% else %}<span class="muted">Publish the event to generate the shareable link.</span>{% endif %}
     </td></tr>
+    <tr><th>All events page</th><td>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <a class="mono" href="{{ directory_url }}" target="_blank" rel="noopener">{{ directory_url }}</a>
+        <button type="button" class="btn btn-sm btn-secondary" data-copy="{{ directory_url }}">Copy link</button>
+      </div>
+      <div class="helptext" style="margin-top:4px;">One link for your website — lists every live event, each with its own Book button.</div>
+    </td></tr>
   </table>
 </div>
 

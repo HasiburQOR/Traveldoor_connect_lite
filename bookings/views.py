@@ -11,7 +11,7 @@ import datetime
 
 from django.contrib import messages
 from core.decorators import staff_member_required  # app login page, not the Django admin
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -37,6 +37,24 @@ from .services import BookingError, cancel_booking, create_booking, release_slot
 # ---------------------------------------------------------------------------
 # Public visitor flow (FR-4) — no login required
 # ---------------------------------------------------------------------------
+def public_events(request):
+    """Public directory of every bookable event — the one link for a website.
+
+    Matches the per-event pages' rules exactly: only published (live) events
+    that haven't auto-closed and carry a public slug are listed, soonest first.
+    """
+    events = [
+        e for e in (
+            Event.objects.filter(status=Event.STATUS_LIVE, public_slug__isnull=False)
+            .exclude(public_slug="")
+            .annotate(active_hosts=Count("team_members", filter=Q(team_members__is_active=True)))
+            .order_by("start_date", "name")
+        )
+        if e.is_publicly_open
+    ]
+    return render(request, "public/event_directory.html", {"events": events})
+
+
 def public_event(request, slug):
     """FR-4.2 — landing page with the host roster."""
     event = get_object_or_404(Event, public_slug=slug)

@@ -786,6 +786,29 @@ img.avatar{display:block;}
 .host-card .host-open{font-size:12.5px; color:var(--slate-soft); margin:0 0 16px;}
 .host-card .btn{margin-top:auto;}
 
+/* Visitor event directory (/b/) — every bookable event on one page. */
+.event-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:16px;
+}
+.event-card{
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-card);
+  padding:26px 22px;
+  text-align:left;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+}
+.event-card .event-name{font-family:var(--font-display); font-size:20px; font-weight:500; color:var(--navy); margin:0 0 4px;}
+.event-card .event-when{font-size:13px; color:var(--slate-soft); margin:0 0 10px;}
+.event-card .event-meta{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 10px;}
+.event-card .event-desc{font-size:13px; color:var(--slate-soft); margin:0 0 10px;}
+.event-card .event-hosts{font-size:12.5px; color:var(--slate-soft); margin:0 0 16px;}
+.event-card .btn{margin-top:auto;}
+
 /* Empty / error states live inside the card system, never bare on the page. */
 .state{
   background:var(--card);

@@ -2,6 +2,8 @@
 {% block title %}{{ event.name }} — book a meeting{% endblock %}
 {% block content %}
 
+<a class="breadcrumb" href="{% url 'bookings_public:public_events' %}">&larr; All events</a>
+
 <div style="margin-bottom:26px;">
   <h1 style="margin-bottom:6px;">{{ event.name }}</h1>
   <p class="host-meta" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">

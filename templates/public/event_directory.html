@@ -1,0 +1,41 @@
+{% extends "base_public.html" %}
+{% block title %}Book a meeting — TravelDoor Connect{% endblock %}
+{% block content %}
+
+<div style="margin-bottom:26px;">
+  <h1 style="margin-bottom:6px;">Book a meeting</h1>
+  <p class="host-meta">Pick an event, choose who you'd like to meet and grab a time that suits you.</p>
+</div>
+
+{% if events %}
+<div class="event-grid">
+  {% for event in events %}
+  <div class="event-card">
+    <p class="event-name">{{ event.name }}</p>
+    <p class="event-when">
+      {{ event.start_date|date:"j M Y" }}{% if event.duration_days > 1 %} – {{ event.end_date|date:"j M Y" }}{% endif %}
+      {% if event.runs_selected_days %}<span class="dot"></span>{{ event.weekday_summary }} only{% endif %}
+    </p>
+    <p class="event-meta">
+      {% include "partials/type_pill.html" with event=event %}
+      {% if event.is_offline and event.venue %}<span class="dot"></span>{{ event.venue }}{% endif %}
+    </p>
+    {% if event.description %}<p class="event-desc">{{ event.description|truncatewords:16 }}</p>{% endif %}
+    <p class="event-hosts">
+      {% if event.active_hosts %}
+        {{ event.active_hosts }} host{{ event.active_hosts|pluralize }} ready to meet you
+      {% else %}
+        Team being confirmed — check back shortly
+      {% endif %}
+    </p>
+    <a class="btn btn-secondary" href="{% url 'bookings_public:public_event' event.public_slug %}">View open times</a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="state">
+  <h2>Nothing open for booking yet</h2>
+  <p>New events are added regularly — check back shortly, or contact us to arrange a meeting.</p>
+</div>
+{% endif %}
+{% endblock %}

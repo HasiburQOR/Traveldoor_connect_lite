@@ -177,6 +177,8 @@ def event_detail(request, pk):
             public_base_url() + reverse("bookings_public:public_event", args=[event.public_slug])
             if event.public_slug else ""
         ),
+        # The all-events directory — one stable link to paste into a website.
+        "directory_url": public_base_url() + reverse("bookings_public:public_events"),
         "event_days": [{"date": d, "past": d < today} for d in event_days],
         "day_chips": day_chips,
         "selected_date": selected_date,

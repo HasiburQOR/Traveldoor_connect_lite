@@ -225,6 +225,42 @@ class FullSurfaceWalkTest(TestCase):
         self.get(reverse("bookings_public:public_event", args=[event.public_slug]))
         self.get(reverse("bookings_public:public_host", args=[event.public_slug, host.pk]))
 
+    def test_public_events_directory_lists_only_bookable_events(self):
+        """/b/ is the one link for the website — only live, unexpired events
+        appear, each linking straight to its own booking page."""
+        Event.objects.create(
+            name="Draft Event", start_date=self.day, duration_days=3,
+            status=Event.STATUS_DRAFT, event_type=Event.TYPE_ONLINE,
+            public_slug="draft-walk",
+        )
+        Event.objects.create(
+            name="Closed Event", start_date=self.day, duration_days=3,
+            status=Event.STATUS_CLOSED, event_type=Event.TYPE_ONLINE,
+            public_slug="closed-walk",
+        )
+        Event.objects.create(
+            name="Expired Event", start_date=datetime.date.today() - datetime.timedelta(days=5),
+            duration_days=1, status=Event.STATUS_LIVE, event_type=Event.TYPE_ONLINE,
+            public_slug="expired-walk",
+        )
+
+        html = self.get(reverse("bookings_public:public_events"))
+        for fx in (self.online, self.offline):
+            event = fx["event"]
+            self.assertIn(event.name, html)
+            self.assertIn(
+                f'href="{reverse("bookings_public:public_event", args=[event.public_slug])}"',
+                html,
+            )
+        for hidden in ("Draft Event", "Closed Event", "Expired Event"):
+            self.assertNotIn(hidden, html)
+
+    def test_public_events_directory_empty_state_needs_no_login(self):
+        self.client.logout()
+        Event.objects.all().update(status=Event.STATUS_DRAFT)
+        html = self.get(reverse("bookings_public:public_events"))
+        self.assertIn("Nothing open for booking yet", html)
+
     # ----- admin side -------------------------------------------------------
     def test_every_admin_screen_renders_for_both_types(self):
         self.client.force_login(self.admin)

@@ -3,7 +3,8 @@
 Three separate pattern lists are included by the root URLconf under
 different prefixes:
 
-    /b/…               public visitor flow (FR-4)
+    /b/                 public directory — every bookable event in one place
+    /b/<slug>/…         public visitor flow (FR-4)
     /m/<token>/…       tokenised visitor manage links (FR-4.6)
     /panel/bookings/…  admin booking management (FR-7)
 
@@ -17,6 +18,7 @@ from . import views
 app_name = "bookings"
 
 public_patterns = [
+    path("", views.public_events, name="public_events"),
     path("<slug:slug>/", views.public_event, name="public_event"),
     path("<slug:slug>/host/<int:pk>/", views.public_host, name="public_host"),
     path("<slug:slug>/book/<int:slot_pk>/", views.public_book, name="public_book"),
