@@ -26,6 +26,8 @@ venv/
 dc_out.txt
 dc_err.txt
 server.txt
+server_out.txt
+server_err.txt
 t_full.txt
 t_host.txt
 test_out.txt
