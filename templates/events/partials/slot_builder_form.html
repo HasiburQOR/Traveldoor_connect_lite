@@ -42,7 +42,13 @@ admin commits to them.
 
     {# Step 2 — which of the event's days to build. #}
     <div class="field">
-      <label>{{ form.days.label }}</label>
+      <div class="days-toggle-row">
+        <label>{{ form.days.label }}</label>
+        <span class="days-toggle">
+          <button type="button" class="btn btn-ghost" id="days-select-all">Select all</button>
+          <button type="button" class="btn btn-ghost" id="days-clear-all">Clear all</button>
+        </span>
+      </div>
       <div class="check-list">
         {% for value, label in form.days.field.choices %}
         <label class="check-option" for="{{ form.days.auto_id }}_{{ forloop.counter0 }}">
@@ -151,6 +157,24 @@ admin commits to them.
       update();
     });
     if (!form.querySelector('.break-row[hidden]')) addBtn.disabled = true;
+  }
+
+  // --- select-all / clear-all for the event-days checkboxes -----------------
+  var dayBoxes = function () { return form.querySelectorAll('[name="days"]'); };
+  var selectAll = form.querySelector('#days-select-all');
+  var clearAll = form.querySelector('#days-clear-all');
+  if (selectAll && clearAll) {
+    var setDays = function (checked) {
+      dayBoxes().forEach(function (box) {
+        if (box.checked !== checked) {
+          box.checked = checked;
+          box.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+      update();
+    };
+    selectAll.addEventListener('click', function () { setDays(true); });
+    clearAll.addEventListener('click', function () { setDays(false); });
   }
 
   var f = function (name) { return form.querySelector('[name="' + name + '"]'); };

@@ -1,4 +1,4 @@
-# TravelDoor Connect - one image serves three roles (see docker/entrypoint.py):
+# Binomar Group Connect - one image serves three roles (see docker/entrypoint.py):
 #   web        migrate + collectstatic, then gunicorn on 0.0.0.0:8000 (default)
 #   scheduler  migrate, then `python manage.py runscheduler` (background loop)
 #   <other>    exec verbatim, e.g. `python manage.py createsuperuser`

@@ -35,6 +35,28 @@ def close_expired_events():
     return closed
 
 
+def close_expired_slots():
+    """Auto-disable booking slots whose meeting window has fully elapsed.
+
+    ``Slot.is_publicly_bookable`` already refuses past slots server-side, so
+    nothing can slip through between a page load and a click; this job makes
+    the expiry permanent and visible: available past slots are flipped to
+    ``closed`` so admins see them as expired rather than still-open.
+    """
+    now = timezone.now()
+    closed = 0
+    for slot in Slot.objects.filter(status=Slot.STATUS_AVAILABLE).select_related("host", "event"):
+        if slot.is_expired:
+            slot.status = Slot.STATUS_CLOSED
+            slot.save(update_fields=["status", "updated_at"])
+            log_action(None, AuditLogEntry.ACTION_CLOSE, slot,
+                       "Auto-closed: booking time expired.")
+            closed += 1
+    if closed:
+        logger.info("Auto-closed %d expired slot(s).", closed)
+    return closed
+
+
 def process_due_reminders():
     """FR-5.2 — send each event's reminder emails at its configured hours.
 
@@ -159,6 +181,7 @@ def run_all_jobs():
     """One scheduler tick — used by `runscheduler` and by tests."""
     result = {
         "closed_events": close_expired_events(),
+        "closed_slots": close_expired_slots(),
         "reminders_sent": process_due_reminders(),
         "inapp_created": create_inapp_notifications(),
         "emails_retried": retry_failed_emails(),

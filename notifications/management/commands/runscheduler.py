@@ -1,5 +1,5 @@
 """
-Run the TravelDoor Connect background worker (SRS 1.2 "Scheduled jobs",
+Run the Binomar Group Connect background worker (SRS 1.2 "Scheduled jobs",
 NFR-4: reminders/notifications must fire even with no admin browser open).
 
 Usage:

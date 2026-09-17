@@ -161,7 +161,8 @@ def event_detail(request, pk):
             "slot_count": len(day_slots),
             "booked": sum(1 for s in day_slots if s.bookings.filter(status=Booking.STATUS_CONFIRMED).exists()),
         })
-    # A chip click narrows the slot table to that day (?date=YYYY-MM-DD).
+    # A chip click narrows the slot table to that day (?date=YYYY-MM-DD);
+    # month / time-of-day filters narrow a long-running (365-day) schedule.
     selected_date = None
     raw_date = request.GET.get("date")
     if raw_date:
@@ -169,6 +170,29 @@ def event_detail(request, pk):
             selected_date = datetime.date.fromisoformat(raw_date)
         except ValueError:
             pass
+    month = None
+    try:
+        month = datetime.datetime.strptime(request.GET.get("month", ""), "%Y-%m").date()
+    except ValueError:
+        pass
+    tod = request.GET.get("tod", "")
+    tod = tod if tod in ("morning", "afternoon", "evening") else ""
+    month_options = []
+    seen_months = set()
+    for s in slots:
+        key = (s.date.year, s.date.month)
+        if key not in seen_months:
+            seen_months.add(key)
+            month_options.append({
+                "value": f"{s.date.year:04d}-{s.date.month:02d}",
+                "label": f"{datetime.date(1990, s.date.month, 1).strftime('%B')} {s.date.year}",
+            })
+    shown_slots = [s for s in slots if selected_date is None or s.date == selected_date]
+    if month:
+        shown_slots = [s for s in shown_slots
+                       if (s.date.year, s.date.month) == (month.year, month.month)]
+    if tod:
+        shown_slots = [s for s in shown_slots if s.time_of_day == tod]
     context = {
         "event": event,
         # Full shareable URL (domain included) — same source emails build their
@@ -182,8 +206,11 @@ def event_detail(request, pk):
         "event_days": [{"date": d, "past": d < today} for d in event_days],
         "day_chips": day_chips,
         "selected_date": selected_date,
+        "selected_month": f"{month.year:04d}-{month.month:02d}" if month else "",
+        "selected_tod": tod,
+        "month_options": month_options,
         "members": event.team_members.prefetch_related("slots"),
-        "slots": [s for s in slots if selected_date is None or s.date == selected_date],
+        "slots": shown_slots,
         "bookings": event.bookings.select_related("slot", "slot__host").order_by("-created_at"),
         "summary": {
             "hosts": event.team_members.filter(is_active=True).count(),

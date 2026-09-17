@@ -1,4 +1,4 @@
-# TravelDoor Connect
+# Binomar Group Connect
 
 Single-company, desktop-first B2B event & meeting scheduling platform built to
 **SRS v1.1 / BRD v1.0**. Django 6.1, Python 3.12, SQLite (dev) / PostgreSQL
@@ -115,7 +115,7 @@ vars win). See [`.env.example`](.env.example) for the full list — notably:
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1,testserver` | comma separated |
 | `PUBLIC_BASE_URL` | `http://127.0.0.1:8000` | absolute origin used in email links |
 | `EMAIL_BACKEND` | console | set to `smtp` + `EMAIL_*` to send real mail |
-| `TIME_ZONE` | `UTC` | e.g. `Europe/Amsterdam` |
+| `TIME_ZONE` | `Asia/Tbilisi` | Georgia (country) local time — every slot and email renders in Tbilisi time |
 
 ## Unit tests
 
@@ -187,7 +187,7 @@ Typical providers:
 | Most hosts (cPanel etc.) | `mail.yourdomain.com` | 465 | SSL | The mailbox password |
 
 Set **Company → Public base URL** at the same time (e.g.
-`https://book.traveldoor.ge`). Every link in every email is built from it, so
+`https://book.binomargroup.ge`). Every link in every email is built from it, so
 while it points at localhost visitors get dead links.
 
 Reminder emails additionally need the scheduler running — `python manage.py

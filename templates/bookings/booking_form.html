@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ title }} — TravelDoor Connect{% endblock %}
+{% block title %}{{ title }} — Binomar Group Connect{% endblock %}
 {% block content %}
 <a class="breadcrumb" href="{% if booking %}{% url 'bookings_admin:admin_detail' booking.pk %}{% else %}{% url 'bookings_admin:admin_list' %}{% endif %}">&larr; {% if booking %}{{ booking.visitor_name }}{% else %}Bookings{% endif %}</a>
 

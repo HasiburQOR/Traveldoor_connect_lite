@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ title }} — TravelDoor Connect{% endblock %}
+{% block title %}{{ title }} — Binomar Group Connect{% endblock %}
 {% block content %}
 <a class="breadcrumb" href="{% if event %}{% url 'events:detail' event.pk %}{% else %}{% url 'events:list' %}{% endif %}">&larr; {% if event %}{{ event.name }}{% else %}Events{% endif %}</a>
 

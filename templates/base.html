@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}TravelDoor Connect{% endblock %}</title>
+  <title>{% block title %}Binomar Group Connect{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
 <body class="app">
 {# Admin chrome: persistent nav across every authenticated screen. #}
 <header class="topbar">
-  <a class="brand" href="{% url 'core:dashboard' %}">TravelDoor Connect</a>
+  <a class="brand" href="{% url 'core:dashboard' %}">Binomar Group Connect</a>
   {% with ns=request.resolver_match.namespace %}
   <nav class="topnav">
     <a href="{% url 'core:dashboard' %}"{% if ns == 'core' %} class="is-active"{% endif %}>Dashboard</a>

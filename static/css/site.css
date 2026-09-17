@@ -483,6 +483,17 @@ ul.radio-list label{display:inline; font-weight:400;}
   cursor:pointer;
 }
 
+/* Select-all / clear-all buttons beside a field label (slot builder days). */
+.days-toggle-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.days-toggle{display:flex; gap:6px;}
+.days-toggle .btn{padding:3px 10px; font-size:12px;}
+
 /* List pagination — sits under a table, inside its card. */
 .pager{
   display:flex;

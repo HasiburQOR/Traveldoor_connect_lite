@@ -50,6 +50,32 @@
   {% endif %}
   {% endif %}
 
+  {# Month / day / favourite-time filters — a 365-day schedule needs narrowing. #}
+  {% if month_options %}
+  <form method="get" class="slot-filters" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:0 0 14px;">
+    <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d'|default:'' }}">
+    <div>
+      <label class="helptext" for="sf-month" style="display:block;">Month</label>
+      <select id="sf-month" name="month" onchange="this.form.submit()">
+        <option value="">All months</option>
+        {% for mo in month_options %}
+          <option value="{{ mo.value }}"{% if selected_month == mo.value %} selected{% endif %}>{{ mo.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="helptext" for="sf-tod" style="display:block;">Time of day</label>
+      <select id="sf-tod" name="tod" onchange="this.form.submit()">
+        <option value="">Any time</option>
+        <option value="morning"{% if selected_tod == 'morning' %} selected{% endif %}>Morning (before 12:00)</option>
+        <option value="afternoon"{% if selected_tod == 'afternoon' %} selected{% endif %}>Afternoon (12:00–17:00)</option>
+        <option value="evening"{% if selected_tod == 'evening' %} selected{% endif %}>Evening (after 17:00)</option>
+      </select>
+    </div>
+    <a class="btn btn-sm btn-ghost" href="?">Reset</a>
+  </form>
+  {% endif %}
+
   {# An open (or rejected) form lives here, inside the swap target. #}
   <div id="slot-form">
     {% if builder_form %}{% include "events/partials/slot_builder_form.html" with form=builder_form %}

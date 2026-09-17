@@ -1,7 +1,7 @@
 """
-Django settings for the TravelDoor Connect project.
+Django settings for the Binomar Group Connect project.
 
-TravelDoor Connect — single-company, desktop-first B2B event & meeting
+Binomar Group Connect — single-company, desktop-first B2B event & meeting
 scheduling platform (see SRS v1.1 section 1.2 for the decided stack).
 
 Environment configuration is read from a `.env` file at the project root
@@ -78,7 +78,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # TravelDoor Connect apps
+    # Binomar Group Connect apps
     "core",
     "accounts",
     "events",
@@ -193,10 +193,10 @@ if os.environ.get("EMAIL_BACKEND", "").lower() == "smtp":
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-COMPANY_NAME = os.environ.get("COMPANY_NAME", "TravelDoor")
+COMPANY_NAME = os.environ.get("COMPANY_NAME", "Binomar Group")
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL",
-    "TravelDoor Connect <bookings@traveldoor.example>",
+    "Binomar Group Connect <bookings@binomargroup.example>",
 )
 
 # Number of delivery attempts before a notification email is abandoned (NFR-3).
@@ -206,7 +206,9 @@ EMAIL_MAX_RETRIES = 3
 # Internationalisation
 # -----------------------------------------------------------------------------
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")
+# Default to Georgia (the country) time so every slot time, email and admin
+# view renders in Tbilisi local time unless explicitly overridden.
+TIME_ZONE = os.environ.get("TIME_ZONE", "Asia/Tbilisi")
 USE_I18N = True
 USE_TZ = True
 
@@ -241,7 +243,7 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # -----------------------------------------------------------------------------
-# TravelDoor Connect platform defaults
+# Binomar Group Connect platform defaults
 # (answers to SRS section 7 open questions — sensible defaults, configurable)
 # -----------------------------------------------------------------------------
 # Reminder emails are sent N hours before a meeting (FR-5.2). Comma separated.

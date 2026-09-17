@@ -64,6 +64,67 @@ def public_event(request, slug):
     return render(request, "public/event_page.html", {"event": event, "hosts": hosts})
 
 
+def _slot_filters(request):
+    """Parse the public schedule filter bar (?month=YYYY-MM&dow=0,2&tod=morning&date=YYYY-MM-DD).
+
+    Month comes from the host's real slot dates, so a 365-day event can be
+    narrowed to one month; ``dow`` filters weekdays (0=Mon), ``tod`` the
+    visitor's favourite part of the day, ``date`` jumps to one exact day.
+    Invalid values are ignored — the page simply shows everything.
+    """
+    raw_month, raw_dow, raw_tod, raw_date = (
+        request.GET.get("month", ""), request.GET.get("dow", ""),
+        request.GET.get("tod", ""), request.GET.get("date", ""),
+    )
+    month = None
+    try:
+        month = datetime.datetime.strptime(raw_month, "%Y-%m").date()
+    except ValueError:
+        pass
+    dows = set()
+    for part in raw_dow.split(","):
+        if part.strip().isdigit() and 0 <= int(part) <= 6:
+            dows.add(int(part))
+    tods = {t for t in raw_tod.split(",") if t in ("morning", "afternoon", "evening")}
+    date = None
+    try:
+        date = datetime.date.fromisoformat(raw_date)
+    except ValueError:
+        pass
+    return {"month": month, "dows": dows, "tods": tods, "date": date}
+
+
+def _filter_slots(slots, flt):
+    """Apply _slot_filters() output to an ordered slot list."""
+    out = slots
+    if flt["month"]:
+        out = [s for s in out if (s.date.year, s.date.month) == (flt["month"].year, flt["month"].month)]
+    if flt["dows"]:
+        out = [s for s in out if s.date.weekday() in flt["dows"]]
+    if flt["tods"]:
+        out = [s for s in out if s.time_of_day in flt["tods"]]
+    if flt["date"]:
+        out = [s for s in out if s.date == flt["date"]]
+    return out
+
+
+def _month_options(slots):
+    """Distinct months covered by the slots, soonest first, as (value, label)
+    pairs — e.g. ("2026-03", "March 2026") — ready for a <select>."""
+    import calendar
+
+    seen, months = set(), []
+    for s in slots:
+        key = (s.date.year, s.date.month)
+        if key not in seen:
+            seen.add(key)
+            months.append({
+                "value": f"{s.date.year:04d}-{s.date.month:02d}",
+                "label": f"{calendar.month_name[s.date.month]} {s.date.year}",
+            })
+    return months
+
+
 def public_host(request, slug, pk):
     """FR-4.3 — a host's open slots + the booking form."""
     event = get_object_or_404(Event, public_slug=slug)
@@ -73,9 +134,18 @@ def public_host(request, slug, pk):
     # Show taken/unavailable times too (struck through) so the visitor can see
     # the shape of the day rather than a mysteriously sparse list.
     slots = Slot.visible_for_host(host)
+    flt = _slot_filters(request)
     form = VisitorBookingForm(event=event)
     return render(request, "public/host_page.html",
-                  {"event": event, "host": host, "slots": slots, "form": form})
+                  {"event": event, "host": host, "form": form,
+                   "slots": _filter_slots(slots, flt),
+                   "all_slots": slots,
+                   "filters": flt,
+                   "month_options": _month_options(slots),
+                   "selected_month": (
+                       f"{flt['month'].year:04d}-{flt['month'].month:02d}"
+                       if flt["month"] else ""
+                   )})
 
 
 def public_book(request, slug, slot_pk):
@@ -99,7 +169,7 @@ def public_book(request, slug, slot_pk):
         if is_htmx:
             return render(request, stub_template, context)
         context.update({
-            "slots": Slot.visible_for_host(host),
+            "slots": _filter_slots(Slot.visible_for_host(host), _slot_filters(request)),
             "selected_slot": slot,
             "stub_template": stub_template,
         })

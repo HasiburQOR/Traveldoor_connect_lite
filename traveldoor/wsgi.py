@@ -1,5 +1,5 @@
 """
-WSGI config for the TravelDoor Connect project.
+WSGI config for the Binomar Group Connect project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 """

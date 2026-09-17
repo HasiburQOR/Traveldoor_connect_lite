@@ -1,4 +1,4 @@
-# TravelDoor Connect - Dokploy deployment (web + scheduler only).
+# Binomar Group Connect - Dokploy deployment (web + scheduler only).
 #
 # The database is provided by Dokploy: create a PostgreSQL database in your
 # project and attach it to this app (that injects DATABASE_URL), or point

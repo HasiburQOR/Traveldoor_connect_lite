@@ -1,5 +1,5 @@
 """
-URL configuration for the TravelDoor Connect project.
+URL configuration for the Binomar Group Connect project.
 
 Sections:
   /panel/...          staff/admin area (events, team, slots, bookings, audit, users)

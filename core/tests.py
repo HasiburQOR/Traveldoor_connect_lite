@@ -293,7 +293,7 @@ class FullSurfaceWalkTest(TestCase):
             }
             for name, url in pages.items():
                 html = self.get(url)
-                self.assertIn("TravelDoor Connect", html, f"{label} {name} missing admin chrome")
+                self.assertIn("Binomar Group Connect", html, f"{label} {name} missing admin chrome")
 
             # These endpoints are htmx fragments: bare partials by design, so
             # they carry no page chrome — but they must still render cleanly.
@@ -800,13 +800,13 @@ class SiteSettingsTest(TestCase):
 
     def _post(self, **overrides):
         data = {
-            "company_name": "TravelDoor",
-            "public_base_url": "https://book.traveldoor.ge",
-            "from_name": "TravelDoor Bookings",
-            "from_email": "bookings@traveldoor.ge",
+            "company_name": "Binomar Group",
+            "public_base_url": "https://book.binomargroup.ge",
+            "from_name": "Binomar Group Bookings",
+            "from_email": "bookings@binomargroup.ge",
             "email_host": "smtp.gmail.com",
             "email_port": "587",
-            "email_host_user": "bookings@traveldoor.ge",
+            "email_host_user": "bookings@binomargroup.ge",
             "email_host_password": "app-password-123",
             "email_use_tls": "on",
             "default_reminder_hours": "24,1",
@@ -843,14 +843,14 @@ class SiteSettingsTest(TestCase):
         self._post()
         site = SiteSettings.load()
         self.assertEqual(site.email_host, "smtp.gmail.com")
-        self.assertEqual(site.from_email, "bookings@traveldoor.ge")
+        self.assertEqual(site.from_email, "bookings@binomargroup.ge")
         self.assertEqual(site.updated_by, self.owner)
 
         from core.runtime import from_email, email_is_sending, public_base_url
 
-        self.assertEqual(from_email(), "TravelDoor Bookings <bookings@traveldoor.ge>")
+        self.assertEqual(from_email(), "Binomar Group Bookings <bookings@binomargroup.ge>")
         self.assertTrue(email_is_sending())
-        self.assertEqual(public_base_url(), "https://book.traveldoor.ge")
+        self.assertEqual(public_base_url(), "https://book.binomargroup.ge")
 
     def test_saved_settings_are_used_for_outgoing_mail(self):
         self.client.force_login(self.owner)
@@ -870,9 +870,9 @@ class SiteSettingsTest(TestCase):
 
         send_booking_confirmation(booking)
         self.assertEqual(mail.outbox[0].from_email,
-                         "TravelDoor Bookings <bookings@traveldoor.ge>")
+                         "Binomar Group Bookings <bookings@binomargroup.ge>")
         # Links in the email use the configured public URL, not localhost.
-        self.assertIn("https://book.traveldoor.ge", mail.outbox[0].body)
+        self.assertIn("https://book.binomargroup.ge", mail.outbox[0].body)
 
     # ----- password handling ----------------------------------------------
     def test_password_is_encrypted_at_rest_and_never_rendered(self):

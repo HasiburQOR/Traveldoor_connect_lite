@@ -373,7 +373,7 @@ def send_test_email(to):
     site = site_settings()
     subject = f"{company_name(site)} Connect — test email"
     body = "\n".join([
-        "This is a test from TravelDoor Connect.",
+        "This is a test from Binomar Group Connect.",
         "",
         f"Backend: {health['backend']}",
         f"Public base URL: {health['base_url']}",

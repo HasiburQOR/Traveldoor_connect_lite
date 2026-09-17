@@ -23,6 +23,48 @@
 
   <div class="perforation"></div>
 
+  {% if month_options %}
+  <form method="get" class="schedule-filter" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;padding:14px 18px 4px;">
+    <div>
+      <label class="section-label" for="f-month" style="display:block;">Month</label>
+      <select id="f-month" name="month" onchange="this.form.submit()">
+        <option value="">All months</option>
+        {% for mo in month_options %}
+          <option value="{{ mo.value }}"{% if selected_month == mo.value %} selected{% endif %}>{{ mo.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="section-label" for="f-dow" style="display:block;">Day</label>
+      <select id="f-dow" name="dow" onchange="this.form.submit()">
+        <option value="">Any day</option>
+        <option value="0"{% if 0 in filters.dows %} selected{% endif %}>Monday</option>
+        <option value="1"{% if 1 in filters.dows %} selected{% endif %}>Tuesday</option>
+        <option value="2"{% if 2 in filters.dows %} selected{% endif %}>Wednesday</option>
+        <option value="3"{% if 3 in filters.dows %} selected{% endif %}>Thursday</option>
+        <option value="4"{% if 4 in filters.dows %} selected{% endif %}>Friday</option>
+        <option value="5"{% if 5 in filters.dows %} selected{% endif %}>Saturday</option>
+        <option value="6"{% if 6 in filters.dows %} selected{% endif %}>Sunday</option>
+      </select>
+    </div>
+    <div>
+      <label class="section-label" for="f-tod" style="display:block;">Time of day</label>
+      <select id="f-tod" name="tod" onchange="this.form.submit()">
+        <option value="">Any time</option>
+        <option value="morning"{% if 'morning' in filters.tods %} selected{% endif %}>Morning (before 12:00)</option>
+        <option value="afternoon"{% if 'afternoon' in filters.tods %} selected{% endif %}>Afternoon (12:00–17:00)</option>
+        <option value="evening"{% if 'evening' in filters.tods %} selected{% endif %}>Evening (after 17:00)</option>
+      </select>
+    </div>
+    <div>
+      <label class="section-label" for="f-date" style="display:block;">Exact date</label>
+      <input type="date" id="f-date" name="date" value="{{ filters.date|date:'Y-m-d'|default:'' }}" onchange="this.form.submit()">
+    </div>
+    <noscript><button type="submit" class="btn btn-sm">Apply filters</button></noscript>
+    <a class="btn btn-sm btn-ghost" href="?">Reset</a>
+  </form>
+  {% endif %}
+
   <div class="body-grid">
     {# Left — pick a time, grouped by day. #}
     <div class="schedule">

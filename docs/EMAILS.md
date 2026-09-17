@@ -1,4 +1,4 @@
-# Working with emails in TravelDoor Connect
+# Working with emails in Binomar Group Connect
 
 Everything outbound — confirmations to bookers (visitors), reminders,
 cancellations, admin-account welcome mails, password-reset mails — flows
@@ -30,7 +30,7 @@ it works, how to turn real sending on, how to verify it, and how to debug it.
    * **Public base URL** — the address visitors use, e.g.
      `https://book.yourcompany.com` (every link inside every email is built
      from it; leaving the `127.0.0.1` default makes manage-links useless).
-   * **From name / From address** — e.g. `TravelDoor Connect` /
+   * **From name / From address** — e.g. `Binomar Group Connect` /
      `bookings@yourcompany.com`. The from address is required once an SMTP
      server is set.
    * **SMTP server** — e.g. `smtp.gmail.com`.
@@ -62,7 +62,7 @@ it works, how to turn real sending on, how to verify it, and how to debug it.
    EMAIL_HOST_USER=bookings@yourcompany.com
    EMAIL_HOST_PASSWORD=********
    EMAIL_USE_TLS=true
-   DEFAULT_FROM_EMAIL=TravelDoor Connect <bookings@yourcompany.com>
+   DEFAULT_FROM_EMAIL=Binomar Group Connect <bookings@yourcompany.com>
    PUBLIC_BASE_URL=https://book.yourcompany.com
    ```
 
@@ -148,7 +148,7 @@ EMAIL_PORT=587              # 587 = STARTTLS, 465 = implicit SSL
 EMAIL_HOST_USER=bookings@yourcompany.com
 EMAIL_HOST_PASSWORD=********
 EMAIL_USE_TLS=true          # with 587; for 465 use SSL instead of STARTTLS
-DEFAULT_FROM_EMAIL=TravelDoor Connect <bookings@yourcompany.com>
+DEFAULT_FROM_EMAIL=Binomar Group Connect <bookings@yourcompany.com>
 PUBLIC_BASE_URL=https://book.yourcompany.com   # every link inside emails is built from this
 ```
 

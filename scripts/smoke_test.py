@@ -1,5 +1,5 @@
 """
-End-to-end smoke test for TravelDoor Connect.
+End-to-end smoke test for Binomar Group Connect.
 
 Run inside the project environment:
     python manage.py shell -c "exec(open('scripts/smoke_test.py', encoding='utf-8').read())"

@@ -574,6 +574,22 @@ class Slot(models.Model):
         return timezone.now() >= self.start_datetime
 
     @property
+    def is_expired(self):
+        """The slot's whole meeting window has elapsed — it can never be
+        booked again, so the scheduler auto-closes it (see
+        notifications.jobs.close_expired_slots)."""
+        return timezone.now() >= self.end_datetime
+
+    @property
+    def time_of_day(self):
+        """Bucket for the public schedule filter: morning / afternoon / evening."""
+        if self.start_time.hour < 12:
+            return "morning"
+        if self.start_time.hour < 17:
+            return "afternoon"
+        return "evening"
+
+    @property
     def _event_or_none(self):
         """The parent event, or None while the slot is still unattached."""
         return self.event if self.event_id else None

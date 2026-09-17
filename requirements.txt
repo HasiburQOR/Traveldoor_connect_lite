@@ -1,4 +1,4 @@
-# TravelDoor Connect - Python 3.12. htmx is vendored in static/js/ and
+# Binomar Group Connect - Python 3.12. htmx is vendored in static/js/ and
 # static/css/site.css is plain CSS (no frontend build step).
 Django>=6.1,<7
 gunicorn>=23.0,<24        # production WSGI server (Docker / Dokploy)
