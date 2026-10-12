@@ -43,9 +43,13 @@ def close_expired_slots():
     the expiry permanent and visible: available past slots are flipped to
     ``closed`` so admins see them as expired rather than still-open.
     """
-    now = timezone.now()
     closed = 0
-    for slot in Slot.objects.filter(status=Slot.STATUS_AVAILABLE).select_related("host", "event"):
+    # Only today's and earlier slots can have elapsed — without the date
+    # bound every tick loaded every open slot of every long-running event.
+    candidates = Slot.objects.filter(
+        status=Slot.STATUS_AVAILABLE, date__lte=timezone.localdate()
+    ).select_related("host", "event")
+    for slot in candidates:
         if slot.is_expired:
             slot.status = Slot.STATUS_CLOSED
             slot.save(update_fields=["status", "updated_at"])

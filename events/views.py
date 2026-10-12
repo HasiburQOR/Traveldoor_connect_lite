@@ -4,12 +4,17 @@ Admin views for events, team members and slots (FR-1, FR-2, FR-3).
 All views require a staff login (FR-8.1). Mutating views write an audit
 entry (FR-9.1) and HTMX requests swap in refreshed partials (NFR-2).
 """
+import calendar
 import datetime
+from urllib.parse import urlsplit
 
 from django.contrib import messages
 from core.decorators import staff_member_required  # app login page, not the Django admin
+from core.pagination import paginate
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models.functions import Coalesce, Greatest
+from django.http import QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -27,6 +32,36 @@ from .forms_bulk import SlotBuilderForm
 from .models import Event, EventDay, Person, Slot, TeamMember
 
 
+# A long-running event holds tens of thousands of slots: the slot table is
+# always read one month (or one day) at a time, and paged within that.
+SLOTS_PER_PAGE = 100
+# Recent bookings shown on the event screen; the full list has its own page.
+EVENT_BOOKINGS_SHOWN = 50
+# Upper bound for one slot-builder run, so a mistyped pattern can't try to
+# write millions of rows in a single request.
+MAX_SLOTS_PER_BUILD = 100_000
+
+TIME_OF_DAY = {
+    "morning": Q(start_time__lt=datetime.time(12, 0)),
+    "afternoon": Q(start_time__gte=datetime.time(12, 0), start_time__lt=datetime.time(17, 0)),
+    "evening": Q(start_time__gte=datetime.time(17, 0)),
+}
+
+
+def _members(event):
+    """The event's hosts with their slot count and first slot.
+
+    Counted in the database — prefetching every slot of every host just to
+    show a number is what made long schedules slow to open.
+    """
+    members = list(event.team_members.annotate(slot_count=Count("slots")))
+    for member in members:
+        member.first_slot = member.slots.first() if member.slot_count else None
+        if member.first_slot is not None:
+            member.first_slot.event = event
+    return members
+
+
 def _team_section(request, event, *, form=None, member=None):
     """Render the whole team section, optionally with an open form inside it.
 
@@ -35,38 +70,138 @@ def _team_section(request, event, *, form=None, member=None):
     the section (table and all) and with it the swap target, leaving the form
     orphaned and every later submit a no-op.
     """
-    members = event.team_members.prefetch_related("slots")
     return render(request, "events/partials/team_section.html",
-                  {"event": event, "members": members, "form": form, "member": member})
+                  {"event": event, "members": _members(event), "form": form, "member": member})
 
 
-def _slot_section(request, event, *, form=None, slot=None, builder_form=None, host_count=None,
-                  selected_date=None):
+def _view_params(request):
+    """The filters of the page the admin is looking at.
+
+    An HTMX swap is a request to some other URL, so the page's own query
+    string (?month=…&date=…&page=…) is read from ``HX-Current-URL`` — the
+    refreshed section then shows the same month, day and page as before.
+    """
+    if request.headers.get("HX-Request"):
+        return QueryDict(urlsplit(request.headers.get("HX-Current-URL", "")).query)
+    return request.GET
+
+
+def _slot_context(request, event):
+    """Everything the slot section shows: one month of day chips and one page
+    of slots, each loaded with a bounded number of queries."""
+    params = _view_params(request)
+    today = timezone.localdate()
+    event_days = event.event_dates()
+
+    # Months come from the event's own calendar, plus any month that still
+    # holds slots (e.g. after the event's dates were changed).
+    month_keys = {(d.year, d.month) for d in event_days}
+    month_keys.update((d.year, d.month) for d in event.slots.dates("date", "month"))
+    month_keys = sorted(month_keys)
+
+    selected_date = None
+    try:
+        selected_date = datetime.date.fromisoformat(params.get("date", ""))
+    except ValueError:
+        pass
+    month = None
+    if selected_date is not None:
+        month = (selected_date.year, selected_date.month)
+    else:
+        try:
+            parsed = datetime.datetime.strptime(params.get("month", ""), "%Y-%m")
+            month = (parsed.year, parsed.month)
+        except ValueError:
+            pass
+        if month not in month_keys:
+            # Default to the current month, else the next one with event days.
+            upcoming = [k for k in month_keys if k >= (today.year, today.month)]
+            month = upcoming[0] if upcoming else (month_keys[-1] if month_keys else None)
+    tod = params.get("tod", "")
+    tod = tod if tod in TIME_OF_DAY else ""
+
+    slots = event.slots.all()
+    if month is not None:
+        slots = slots.filter(date__year=month[0], date__month=month[1])
+
+    # Calendar chips: one per event day of the month, counted in one query.
+    counts = {
+        row["date"]: row for row in
+        slots.exclude(status=Slot.STATUS_BREAK).values("date").annotate(
+            slot_count=Count("pk", distinct=True),
+            booked=Count("pk", distinct=True,
+                         filter=Q(bookings__status=Booking.STATUS_CONFIRMED)),
+        ).order_by()
+    }
+    skipped_dates = EventDay.skipped_dates_for(event)
+    day_chips = [
+        {
+            "date": d, "past": d < today, "skipped": d in skipped_dates,
+            "slot_count": counts.get(d, {}).get("slot_count", 0),
+            "booked": counts.get(d, {}).get("booked", 0),
+        }
+        for d in event_days if month is None or (d.year, d.month) == month
+    ]
+
+    if selected_date is not None:
+        slots = slots.filter(date=selected_date)
+    if tod:
+        slots = slots.filter(TIME_OF_DAY[tod])
+    page = paginate(
+        request,
+        # Explicit order: Meta.ordering is dropped once a query is grouped.
+        Slot.with_confirmed_count(slots.select_related("host"))
+        .order_by("date", "start_time", "pk"),
+        per_page=SLOTS_PER_PAGE, page_number=params.get("page"),
+    )
+    page.object_list = list(page.object_list)
+    for slot in page.object_list:
+        slot.event = event  # share the one instance: no query per row
+
+    selected_month = f"{month[0]:04d}-{month[1]:02d}" if month else ""
+    page_params = QueryDict(mutable=True)
+    for key, value in (("month", selected_month), ("tod", tod),
+                       ("date", selected_date.isoformat() if selected_date else "")):
+        if value:
+            page_params[key] = value
+    return {
+        "day_chips": day_chips,
+        "selected_date": selected_date,
+        "selected_month": selected_month,
+        "selected_tod": tod,
+        "month_options": [
+            {"value": f"{y:04d}-{m:02d}", "label": f"{calendar.month_name[m]} {y}"}
+            for y, m in month_keys
+        ],
+        "slots": page.object_list,
+        "slot_page": page,
+        "slot_qs": page_params.urlencode() + "&" if page_params else "",
+    }
+
+
+def _slot_section(request, event, *, form=None, slot=None, builder_form=None, host_count=None):
     """Render the whole slot section, optionally with an open form inside it.
 
-    Same swap-target rule as ``_team_section``. ``selected_date`` narrows the
-    table to one day (the calendar chip the admin clicked).
+    Same swap-target rule as ``_team_section``.
     """
-    slots = event.slots.select_related("host").prefetch_related("bookings")
-    if selected_date is not None:
-        slots = [s for s in slots if s.date == selected_date]
-    return render(request, "events/partials/slot_section.html",
-                  {"event": event, "slots": slots, "form": form, "slot": slot,
-                   "builder_form": builder_form, "host_count": host_count,
-                   "selected_date": selected_date})
+    context = _slot_context(request, event)
+    context.update({"event": event, "form": form, "slot": slot,
+                    "builder_form": builder_form, "host_count": host_count})
+    return render(request, "events/partials/slot_section.html", context)
 
 
-def _booking_section(request, event):
-    bookings = (
-        event.bookings.select_related("slot", "slot__host").order_by("-created_at")
+def _per_event_count(queryset):
+    """Rows of ``queryset`` per event, as a subquery.
+
+    Separate subqueries instead of three joined Count()s: joining hosts ×
+    slots × bookings multiplies the rows before counting them, which stops
+    scaling the moment one event has a year of slots.
+    """
+    counted = (
+        queryset.filter(event=OuterRef("pk")).order_by().values("event")
+        .annotate(n=Count("pk")).values("n")
     )
-    return render(
-        request,
-        "events/partials/booking_section.html",
-        {"event": event, "bookings": bookings, "available_slots": [
-            s for s in event.slots.select_related("host") if s.is_publicly_bookable()
-        ]},
-    )
+    return Coalesce(Subquery(counted, output_field=IntegerField()), Value(0))
 
 
 # ---------------------------------------------------------------------------
@@ -78,12 +213,10 @@ def event_list(request):
     # Annotate the counts the list shows, so the table is one query rather than
     # three per row.
     events = Event.objects.annotate(
-        host_count=Count("team_members", distinct=True),
-        slot_count=Count("slots", distinct=True),
-        booking_count=Count(
-            "bookings", distinct=True,
-            filter=Q(bookings__status=Booking.STATUS_CONFIRMED),
-        ),
+        host_count=_per_event_count(TeamMember.objects.all()),
+        slot_count=_per_event_count(Slot.objects.all()),
+        booking_count=_per_event_count(
+            Booking.objects.filter(status=Booking.STATUS_CONFIRMED)),
     )
     return render(request, "events/event_list.html",
                   {"events": events, "base_url": public_base_url()})
@@ -142,57 +275,20 @@ def event_update(request, pk):
 @staff_member_required
 def event_detail(request, pk):
     event = get_object_or_404(Event, pk=pk)
-    slots = list(event.slots.select_related("host").prefetch_related("bookings"))
-    bookable = [s for s in slots if not s.is_break]
-    confirmed = event.bookings.filter(status=Booking.STATUS_CONFIRMED).count()
     today = timezone.localdate()
     event_days = event.event_dates()
     days_left = sum(1 for d in event_days if d >= today)
-    skipped_dates = EventDay.skipped_dates_for(event)
-    # Calendar chips: one per event day, with its live counts and skipped flag,
-    # so the organiser sees the whole schedule as a day-by-day board.
-    day_chips = []
-    for d in event_days:
-        day_slots = [s for s in slots if s.date == d and not s.is_break]
-        day_chips.append({
-            "date": d,
-            "past": d < today,
-            "skipped": d in skipped_dates,
-            "slot_count": len(day_slots),
-            "booked": sum(1 for s in day_slots if s.bookings.filter(status=Booking.STATUS_CONFIRMED).exists()),
-        })
-    # A chip click narrows the slot table to that day (?date=YYYY-MM-DD);
-    # month / time-of-day filters narrow a long-running (365-day) schedule.
-    selected_date = None
-    raw_date = request.GET.get("date")
-    if raw_date:
-        try:
-            selected_date = datetime.date.fromisoformat(raw_date)
-        except ValueError:
-            pass
-    month = None
-    try:
-        month = datetime.datetime.strptime(request.GET.get("month", ""), "%Y-%m").date()
-    except ValueError:
-        pass
-    tod = request.GET.get("tod", "")
-    tod = tod if tod in ("morning", "afternoon", "evening") else ""
-    month_options = []
-    seen_months = set()
-    for s in slots:
-        key = (s.date.year, s.date.month)
-        if key not in seen_months:
-            seen_months.add(key)
-            month_options.append({
-                "value": f"{s.date.year:04d}-{s.date.month:02d}",
-                "label": f"{datetime.date(1990, s.date.month, 1).strftime('%B')} {s.date.year}",
-            })
-    shown_slots = [s for s in slots if selected_date is None or s.date == selected_date]
-    if month:
-        shown_slots = [s for s in shown_slots
-                       if (s.date.year, s.date.month) == (month.year, month.month)]
-    if tod:
-        shown_slots = [s for s in shown_slots if s.time_of_day == tod]
+    # Summary numbers are aggregated in the database — the event may hold a
+    # year or two of slots, far too many to load just to count them.
+    totals = event.slots.aggregate(
+        slots=Count("pk", filter=~Q(status=Slot.STATUS_BREAK)),
+        breaks=Count("pk", filter=Q(status=Slot.STATUS_BREAK)),
+    )
+    seats_left = Slot.with_confirmed_count(
+        event.slots.exclude(status__in=[Slot.STATUS_BREAK, Slot.STATUS_CLOSED])
+    ).aggregate(n=Sum(Greatest(F("capacity") - F("confirmed_count"), Value(0))))["n"] or 0
+    bookings = event.bookings.select_related("slot", "slot__host").order_by("-created_at")
+    booking_total = bookings.count()
     context = {
         "event": event,
         # Full shareable URL (domain included) — same source emails build their
@@ -204,23 +300,21 @@ def event_detail(request, pk):
         # The all-events directory — one stable link to paste into a website.
         "directory_url": public_base_url() + reverse("bookings_public:public_events"),
         "event_days": [{"date": d, "past": d < today} for d in event_days],
-        "day_chips": day_chips,
-        "selected_date": selected_date,
-        "selected_month": f"{month.year:04d}-{month.month:02d}" if month else "",
-        "selected_tod": tod,
-        "month_options": month_options,
-        "members": event.team_members.prefetch_related("slots"),
-        "slots": shown_slots,
-        "bookings": event.bookings.select_related("slot", "slot__host").order_by("-created_at"),
+        "members": _members(event),
+        "bookings": bookings[:EVENT_BOOKINGS_SHOWN],
+        "bookings_hidden": max(booking_total - EVENT_BOOKINGS_SHOWN, 0),
+        # First open slot, to pre-load the "Book for a visitor" form.
+        "available_slots": Slot.public_for_event(event, limit=1),
         "summary": {
             "hosts": event.team_members.filter(is_active=True).count(),
-            "slots": len(bookable),
-            "breaks": len(slots) - len(bookable),
-            "booked": confirmed,
-            "seats_left": sum(s.seats_left() for s in bookable),
+            "slots": totals["slots"],
+            "breaks": totals["breaks"],
+            "booked": event.bookings.filter(status=Booking.STATUS_CONFIRMED).count(),
+            "seats_left": seats_left,
             "days_left": max(days_left, 0) if not event.is_expired else 0,
         },
     }
+    context.update(_slot_context(request, event))
     return render(request, "events/event_detail.html", context)
 
 
@@ -333,21 +427,26 @@ def event_clone(request, pk):
             copy.save()
             host_map[member.pk] = copy
 
-        for slot in source.slots.all():
+        copies = []
+        for slot in source.slots.iterator(chunk_size=2000):
             host = host_map.get(slot.host_id)
             if host is None:
                 continue  # slot belonged to a host that was removed
             offset = slot.date - source.start_date
-            new_slot = Slot.objects.get(pk=slot.pk)
-            new_slot.pk = None
-            new_slot.event = clone
-            new_slot.host = host
-            new_slot.date = clone.start_date + offset
+            slot.pk = None
+            slot._state.adding = True
+            slot.event = clone
+            slot.host = host
+            slot.date = clone.start_date + offset
             # Carry breaks across; anything else starts open again.
-            new_slot.status = (
-                Slot.STATUS_BREAK if slot.is_break else Slot.STATUS_AVAILABLE
-            )
-            new_slot.save()  # keeps `mode` mirrored from the event type
+            slot.status = Slot.STATUS_BREAK if slot.is_break else Slot.STATUS_AVAILABLE
+            if slot.video_provider == Event.PROVIDER_JITSI:
+                # An auto-generated room belongs to the source slot — the
+                # copy gets its own, or both events would meet in one room.
+                slot.meeting_link = ""
+            slot.sync_from_event()  # keeps `mode` mirrored from the event type
+            copies.append(slot)
+        Slot.objects.bulk_create(copies, batch_size=500)
 
     log_action(request.user, AuditLogEntry.ACTION_CREATE, clone,
                details=f"Cloned from “{source.name}”.")
@@ -643,44 +742,69 @@ def slot_build(request, event_pk):
     form = SlotBuilderForm(request.POST or None, event=event,
                            host=request.GET.get("host") or None)
     created, skipped = 0, 0
+    plan = None
     if request.method == "POST" and form.is_valid():
         times = form.generate_times()
-        capacity = form.cleaned_data["capacity"]
-        duration = form.cleaned_data["duration_minutes"]
         windows = form.break_windows() if form.cleaned_data.get("mark_breaks") else []
         target_hosts = [form.cleaned_data["host"]] if form.cleaned_data.get("host") else list(hosts)
+        dates = form.selected_dates()
+        total = len(target_hosts) * len(dates) * (len(times) + len(windows))
+        if total > MAX_SLOTS_PER_BUILD:
+            form.add_error(None, (
+                f"That would create about {total:,} slots in one go — the limit is "
+                f"{MAX_SLOTS_PER_BUILD:,}. Build fewer days or one host at a time."
+            ))
+        else:
+            plan = (times, windows, target_hosts, dates)
+    if plan is not None:
+        times, windows, target_hosts, dates = plan
+        capacity = form.cleaned_data["capacity"]
+        duration = form.cleaned_data["duration_minutes"]
+        # One read for what already exists and one bulk insert for the rest —
+        # a year of days is thousands of slots per host, far too many to
+        # get_or_create one at a time.
+        taken = set()
+        if target_hosts and dates:
+            taken = set(
+                Slot.objects.filter(host__in=target_hosts, date__range=(min(dates), max(dates)))
+                .values_list("host_id", "date", "start_time")
+            )
+        new_slots = []
         for host in target_hosts:
-            for date in form.selected_dates():
+            for date in dates:
                 for start in times:
-                    _, made = Slot.objects.get_or_create(
-                        host=host, date=date, start_time=start,
-                        defaults={
-                            # mode is set by Slot.save() from the event type.
-                            "event": event, "capacity": capacity,
-                            "duration_minutes": duration,
-                        },
-                    )
-                    if made:
-                        created += 1
-                    else:
+                    key = (host.pk, date, start)
+                    if key in taken:
                         skipped += 1
+                        continue
+                    taken.add(key)
+                    # mode is set by sync_from_event() from the event type.
+                    new_slots.append(Slot(
+                        event=event, host=host, date=date, start_time=start,
+                        capacity=capacity, duration_minutes=duration,
+                    ))
                 for break_start, break_end in windows:
                     # One non-bookable entry per host per day, so each break is
                     # visible in the schedule rather than an unexplained gap.
+                    key = (host.pk, date, break_start)
+                    if key in taken:
+                        continue
+                    taken.add(key)
                     minutes = int(
                         (datetime.datetime.combine(date, break_end)
                          - datetime.datetime.combine(date, break_start)).total_seconds() // 60
                     )
-                    _, made = Slot.objects.get_or_create(
-                        host=host, date=date, start_time=break_start,
-                        defaults={
-                            "event": event, "capacity": 1,
-                            "duration_minutes": max(minutes, 5),
-                            "status": Slot.STATUS_BREAK,
-                        },
-                    )
-                    if made:
-                        created += 1
+                    new_slots.append(Slot(
+                        event=event, host=host, date=date, start_time=break_start,
+                        capacity=1, duration_minutes=max(minutes, 5),
+                        status=Slot.STATUS_BREAK,
+                    ))
+        for new_slot in new_slots:
+            new_slot.sync_from_event()  # bulk_create() never calls save()
+        with transaction.atomic():
+            # ignore_conflicts: a double-submitted form must not fail the run.
+            Slot.objects.bulk_create(new_slots, batch_size=500, ignore_conflicts=True)
+        created = len(new_slots)
         if created or skipped:
             log_action(request.user, AuditLogEntry.ACTION_CREATE, event,
                        details=f"Slot builder: {created} slot(s) created ({skipped} already existed).")
@@ -703,17 +827,19 @@ def slot_delete(request, event_pk, pk):
     event = get_object_or_404(Event, pk=event_pk)
     slot = get_object_or_404(Slot, pk=pk, event=event)
     affected = list(slot.bookings.filter(status=Booking.STATUS_CONFIRMED).select_related("slot", "slot__host"))
+    for booking in affected:
+        booking.status = Booking.STATUS_CANCELLED
+        booking.cancelled_at = timezone.now()
+        booking.save(update_fields=["status", "cancelled_at", "updated_at"])
+    # Visitor notices must go out while the booking rows still exist — the
+    # NotificationLog FK fails once they are deleted (same rule as event_delete).
+    for booking in affected:
+        send_cancellation_to_visitor(booking, reason="The organiser removed this meeting slot.")
     with transaction.atomic():
-        for booking in affected:
-            booking.status = Booking.STATUS_CANCELLED
-            booking.cancelled_at = timezone.now()
-            booking.save(update_fields=["status", "cancelled_at", "updated_at"])
         log_action(request.user, AuditLogEntry.ACTION_DELETE, slot,
                    details=f"Slot deleted; {len(affected)} booking(s) cancelled with notice.")
         slot.bookings.all().delete()
         slot.delete()
-    for booking in affected:
-        send_cancellation_to_visitor(booking, reason="The organiser removed this meeting slot.")
     if request.headers.get("HX-Request"):
         return _slot_section(request, event)
     messages.success(request, f"Slot deleted; {len(affected)} visitor(s) notified.")
@@ -739,7 +865,9 @@ def slot_close(request, event_pk, pk):
 def slot_reopen(request, event_pk, pk):
     event = get_object_or_404(Event, pk=event_pk)
     slot = get_object_or_404(Slot, pk=pk, event=event)
-    slot.status = Slot.STATUS_AVAILABLE if slot.seats_left() > 0 else Slot.STATUS_BOOKED
+    # Not seats_left(): that reports 0 for a closed slot, which is what this is.
+    has_room = slot.active_bookings_count() < slot.capacity
+    slot.status = Slot.STATUS_AVAILABLE if has_room else Slot.STATUS_BOOKED
     slot.save(update_fields=["status", "updated_at"])
     log_action(request.user, AuditLogEntry.ACTION_REACTIVATE, slot, "Slot re-opened.")
     if request.headers.get("HX-Request"):

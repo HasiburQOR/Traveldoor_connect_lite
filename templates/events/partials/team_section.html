@@ -30,10 +30,10 @@
           <td><strong>{{ m.name }}</strong>{% if m.linked_user %}<div class="muted">{{ m.linked_user.username }}</div>{% endif %}</td>
           <td>{{ m.role|default:"—" }}</td>
           <td>{{ m.email|default:"—" }}</td>
-          <td>{{ m.slots.all|length }}</td>
+          <td>{{ m.slot_count }}</td>
           <td class="muted">
             {# Only the fields this event's type actually uses. #}
-            {% with s=m.slots.all|first %}
+            {% with s=m.first_slot %}
               {% if not s %}—
               {% elif event.is_online %}
                 {% if s.effective_meeting_link %}<span class="pill pill-teal">Link set</span>{% else %}<span class="pill pill-gold">No link yet</span>{% endif %}

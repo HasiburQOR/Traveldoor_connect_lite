@@ -627,7 +627,7 @@ class EventScheduleTest(TestCase):
         self.assertFalse(Event.objects.filter(name="Roadshow").exists())
 
     def test_count_mode_caps_the_span(self):
-        response = self.post_create({"duration_days": "400"})
+        response = self.post_create({"duration_days": "800"})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "split longer runs")
 

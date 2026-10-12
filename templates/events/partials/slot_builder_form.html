@@ -165,12 +165,9 @@ admin commits to them.
   var clearAll = form.querySelector('#days-clear-all');
   if (selectAll && clearAll) {
     var setDays = function (checked) {
-      dayBoxes().forEach(function (box) {
-        if (box.checked !== checked) {
-          box.checked = checked;
-          box.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      });
+      // One recount at the end — a change event per box re-ran the preview
+      // for every one of a year's worth of days.
+      dayBoxes().forEach(function (box) { box.checked = checked; });
       update();
     };
     selectAll.addEventListener('click', function () { setDays(true); });

@@ -51,7 +51,8 @@ class Event(models.Model):
     ]
 
     # Calendar span guard — keeps event_dates() and the breakdown UI bounded.
-    MAX_SPAN_DAYS = 366
+    # Two years: long-running schedules are built in bulk and paged by month.
+    MAX_SPAN_DAYS = 731
     # Short labels for date.weekday() numbers (0=Monday).
     WEEKDAY_LABELS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
     WEEKDAYS_ALL = ",".join(str(d) for d in range(7))
@@ -504,6 +505,11 @@ class Slot(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["host", "date", "start_time"], name="unique_host_date_time"),
         ]
+        indexes = [
+            # Every schedule screen reads "this event's slots, in day order",
+            # usually narrowed to a month or a day.
+            models.Index(fields=["event", "date", "start_time"], name="slot_event_date_time"),
+        ]
 
     def __str__(self):
         return f"{self.host.name} — {self.date} {self.start_time.strftime('%H:%M')} ({self.get_mode_display()})"
@@ -528,12 +534,14 @@ class Slot(models.Model):
         ]
         return "https://meet.jit.si/" + "-".join(str(p) for p in parts)
 
-    def save(self, *args, **kwargs):
+    def sync_from_event(self):
         """Mode always mirrors the parent event's type (no per-slot override).
 
         Online slots with no link of their own and no event default get a
         private auto-generated room, so every meeting has its own link and
-        concurrent meetings never share one.
+        concurrent meetings never share one. Called by save(); bulk writers
+        (the slot builder, event clone) call it themselves because
+        bulk_create() never runs save().
         """
         if self.event_id:
             self.mode = self.event.event_type
@@ -545,6 +553,9 @@ class Slot(models.Model):
                         self.video_provider = Event.PROVIDER_JITSI
             else:
                 self.video_provider = self.meeting_link = ""
+
+    def save(self, *args, **kwargs):
+        self.sync_from_event()
         update_fields = kwargs.get("update_fields")
         if update_fields is not None:
             kwargs["update_fields"] = list(
@@ -552,8 +563,6 @@ class Slot(models.Model):
                                                      "table_name", "video_provider", "meeting_link"])
             )
         return super().save(*args, **kwargs)
-
-
 
     # ----- computed helpers -------------------------------------------------
     @property
@@ -624,7 +633,17 @@ class Slot(models.Model):
         event = self._event_or_none
         return self.table_name or (event.table_name if event else "")
 
+    @classmethod
+    def with_confirmed_count(cls, queryset):
+        """Annotate ``confirmed_count`` so seat maths needs no query per slot."""
+        return queryset.annotate(
+            confirmed_count=models.Count("bookings", filter=models.Q(bookings__status="confirmed"))
+        )
+
     def active_bookings_count(self):
+        annotated = getattr(self, "confirmed_count", None)  # see with_confirmed_count()
+        if annotated is not None:
+            return annotated
         return self.bookings.filter(status="confirmed").count()
 
     def seats_left(self):
@@ -632,15 +651,21 @@ class Slot(models.Model):
             return 0
         return max(self.capacity - self.active_bookings_count(), 0)
 
-    def is_publicly_bookable(self):
-        """Can a visitor book this slot right now? (FR-3.4, FR-4.3)"""
+    def is_publicly_bookable(self, skipped=None):
+        """Can a visitor book this slot right now? (FR-3.4, FR-4.3)
+
+        ``skipped`` is the event's skipped dates when the caller already has
+        them — list screens pass it so a long schedule isn't one query per slot.
+        """
         if not self.event.is_publicly_open:
             return False
         if self.status != self.STATUS_AVAILABLE or self.is_past:
             return False
         if self.seats_left() <= 0:
             return False
-        if self.date in EventDay.skipped_dates_for(self.event):
+        if skipped is None:
+            skipped = EventDay.skipped_dates_for(self.event)
+        if self.date in skipped:
             return False  # the organiser is not holding meetings this day
         if self.mode == self.MODE_ONLINE and not (self.effective_provider and self.effective_meeting_link):
             # An online slot only opens for booking once the admin has chosen
@@ -725,23 +750,61 @@ class Slot(models.Model):
             raise ValidationError(errors)
 
     @classmethod
-    def visible_for_host(cls, host):
+    def _load_for_public(cls, event, queryset, limit=None):
+        """Upcoming slots from ``queryset`` with ``bookable`` set on each.
+
+        One query however long the schedule is: confirmed counts are
+        annotated, the skipped days are fetched once, and every slot shares
+        the one ``event`` instance instead of a joined copy per row.
+        """
+        skipped = EventDay.skipped_dates_for(event)
+        # Explicit order: Meta.ordering is dropped once a query is grouped.
+        queryset = cls.with_confirmed_count(
+            queryset.filter(date__gte=timezone.localdate()).exclude(date__in=skipped)
+        ).order_by("date", "start_time", "pk")
+        slots = []
+        for slot in queryset.iterator(chunk_size=2000):
+            slot.event = event
+            if slot.is_past:
+                continue  # earlier today
+            slot.bookable = slot.is_publicly_bookable(skipped=skipped)
+            slots.append(slot)
+            if limit and len(slots) >= limit:
+                break
+        return slots
+
+    @classmethod
+    def visible_for_host(cls, host, queryset=None):
         """Every upcoming slot for a host — bookable or not (FR-4.3).
 
         The public page renders unbookable ones struck through so visitors see
         the whole day, not just the gaps. Whole days the organiser skipped are
         hidden entirely — a day with no meetings has nothing to show.
+        ``queryset`` narrows the host's slots first (the month / day filters).
         """
-        skipped = EventDay.skipped_dates_for(host.event)
-        return [
-            s for s in cls.objects.filter(host=host)
-            .exclude(status__in=[cls.STATUS_CLOSED, cls.STATUS_BREAK])
-            .select_related("event", "host")
-            if not s.is_past and s.date not in skipped
-        ]
+        if queryset is None:
+            queryset = cls.objects.all()
+        queryset = queryset.filter(host=host).exclude(
+            status__in=[cls.STATUS_CLOSED, cls.STATUS_BREAK]
+        )
+        slots = cls._load_for_public(host.event, queryset)
+        for slot in slots:
+            slot.host = host
+        return slots
 
     @classmethod
-    def public_for_event(cls, event):
-        """All publicly bookable slots across an event (used by the manage link)."""
-        return [s for s in cls.objects.filter(event=event, status=cls.STATUS_AVAILABLE).select_related("event", "host") if s.is_publicly_bookable()]
+    def public_for_event(cls, event, limit=None):
+        """Publicly bookable slots across an event, soonest first.
 
+        Used by the reschedule pickers; ``limit`` keeps a year-long schedule
+        from becoming a dropdown with tens of thousands of options.
+        """
+        queryset = cls.objects.filter(
+            event=event, status=cls.STATUS_AVAILABLE
+        ).select_related("host")
+        if limit is None:
+            return [s for s in cls._load_for_public(event, queryset) if s.bookable]
+        # Unbookable rows are rare here (already filtered to available), so a
+        # small over-read is enough to fill the limit.
+        slots = cls._load_for_public(event, queryset, limit=limit * 2)
+        return [s for s in slots if s.bookable][:limit]

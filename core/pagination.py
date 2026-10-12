@@ -8,15 +8,16 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 DEFAULT_PER_PAGE = 25
 
 
-def paginate(request, queryset, per_page=DEFAULT_PER_PAGE):
+def paginate(request, queryset, per_page=DEFAULT_PER_PAGE, page_number=None):
     """Return the requested page of ``queryset``.
 
     Out-of-range or non-numeric ``?page=`` values fall back to a valid page
     rather than raising — a stale bookmark should still show something useful.
+    ``page_number`` overrides ``?page=`` for callers that read it elsewhere.
     """
     paginator = Paginator(queryset, per_page)
     try:
-        return paginator.page(request.GET.get("page"))
+        return paginator.page(page_number or request.GET.get("page"))
     except PageNotAnInteger:
         return paginator.page(1)
     except EmptyPage:
