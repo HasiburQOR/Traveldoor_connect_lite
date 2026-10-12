@@ -72,6 +72,8 @@ def release_slot(slot):
         return
     with transaction.atomic():
         slot = Slot.objects.select_for_update().get(pk=slot.pk)
+        if slot.status in (Slot.STATUS_CLOSED, Slot.STATUS_BREAK):
+            return  # closed by the organiser (or expired) — a cancellation never reopens it
         confirmed = slot.bookings.filter(status=Booking.STATUS_CONFIRMED).count()
         if confirmed < slot.capacity:
             slot.status = Slot.STATUS_AVAILABLE

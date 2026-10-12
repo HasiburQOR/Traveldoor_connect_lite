@@ -29,7 +29,7 @@
               <option value="{{ s.pk }}">{{ s.date|date:"D, j M" }} · {{ s.start_time|time:"g:i A" }} — {{ s.host.name }}</option>
             {% endfor %}
           </select>
-          <span class="helptext">Your current time is released as soon as the new one is confirmed.</span>
+          <span class="helptext">The soonest open times are listed. Your current time is released as soon as the new one is confirmed.</span>
         </div>
         <div class="actions">
           <button type="submit" class="btn btn-primary">Move my meeting</button>

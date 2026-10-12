@@ -1,6 +1,6 @@
 <div class="card" id="slot-section">
   <div class="card-head">
-    <h2>Slots <span class="muted" style="font-family:var(--font-ui);font-size:13px;font-weight:400;">{{ slots|length }}</span></h2>
+    <h2>Slots <span class="muted" style="font-family:var(--font-ui);font-size:13px;font-weight:400;">{{ slot_page.paginator.count }}</span></h2>
     <div class="actions" style="margin-top:0;">
       <button class="btn btn-sm btn-ghost" hx-get="{% url 'events:slot_build' event.pk %}"
               hx-target="#slot-form" hx-swap="innerHTML show:#slot-form:top">Build day plan</button>
@@ -14,15 +14,45 @@
     {% else %}Every slot on this event is in person. Slots fall back to the event's venue, hall and table unless you override them.{% endif %}
   </p>
 
-  {# Day-by-day calendar: one chip per event day. Click to see that day's
-     slots (and pre-fill the Add-slot date); the button skips/re-opens the
-     whole day. #}
+  {# Month / time-of-day filters. A long-running event is always shown one
+     month at a time — a year of days and slots is too much for one page. #}
+  {% if month_options|length > 1 or slots or selected_tod %}
+  <form method="get" class="slot-filters" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:0 0 14px;">
+    {% if month_options|length > 1 %}
+    <div>
+      <label class="helptext" for="sf-month" style="display:block;">Month</label>
+      <select id="sf-month" name="month" onchange="this.form.submit()">
+        {% for mo in month_options %}
+          <option value="{{ mo.value }}"{% if selected_month == mo.value %} selected{% endif %}>{{ mo.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% else %}
+    <input type="hidden" name="month" value="{{ selected_month }}">
+    {% endif %}
+    <div>
+      <label class="helptext" for="sf-tod" style="display:block;">Time of day</label>
+      <select id="sf-tod" name="tod" onchange="this.form.submit()">
+        <option value="">Any time</option>
+        <option value="morning"{% if selected_tod == 'morning' %} selected{% endif %}>Morning (before 12:00)</option>
+        <option value="afternoon"{% if selected_tod == 'afternoon' %} selected{% endif %}>Afternoon (12:00–17:00)</option>
+        <option value="evening"{% if selected_tod == 'evening' %} selected{% endif %}>Evening (after 17:00)</option>
+      </select>
+    </div>
+    <noscript><button type="submit" class="btn btn-sm">Apply</button></noscript>
+    <a class="btn btn-sm btn-ghost" href="?">Reset</a>
+  </form>
+  {% endif %}
+
+  {# Day-by-day calendar: one chip per event day of the month shown. Click to
+     see that day's slots (and pre-fill the Add-slot date); the button
+     skips/re-opens the whole day. #}
   {% if day_chips %}
   <div class="day-chips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
     {% for chip in day_chips %}
     <div class="day-chip{% if selected_date == chip.date %} is-active{% endif %}"
          style="border:1px solid var(--line,#ddd);border-radius:8px;padding:6px 10px;{% if chip.skipped %}opacity:.55;{% endif %}{% if selected_date == chip.date %}border-color:var(--accent,#0a7);box-shadow:0 0 0 1px var(--accent,#0a7);{% endif %}">
-      <a href="?date={{ chip.date|date:'Y-m-d' }}" style="text-decoration:none;color:inherit;">
+      <a href="?date={{ chip.date|date:'Y-m-d' }}{% if selected_tod %}&tod={{ selected_tod }}{% endif %}" style="text-decoration:none;color:inherit;">
         <strong>{{ chip.date|date:"D j M" }}</strong>
         {% if chip.skipped %}
           <span class="pill pill-gold">Skipped</span>
@@ -46,34 +76,8 @@
     {% endfor %}
   </div>
   {% if selected_date %}
-  <p class="helptext" style="margin:-8px 0 12px;">Showing <strong>{{ selected_date|date:"l, j F" }}</strong> only — <a href="?">show all days</a>.</p>
+  <p class="helptext" style="margin:-8px 0 12px;">Showing <strong>{{ selected_date|date:"l, j F" }}</strong> only — <a href="?month={{ selected_month }}{% if selected_tod %}&tod={{ selected_tod }}{% endif %}">show the whole month</a>.</p>
   {% endif %}
-  {% endif %}
-
-  {# Month / day / favourite-time filters — a 365-day schedule needs narrowing. #}
-  {% if month_options %}
-  <form method="get" class="slot-filters" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:0 0 14px;">
-    <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d'|default:'' }}">
-    <div>
-      <label class="helptext" for="sf-month" style="display:block;">Month</label>
-      <select id="sf-month" name="month" onchange="this.form.submit()">
-        <option value="">All months</option>
-        {% for mo in month_options %}
-          <option value="{{ mo.value }}"{% if selected_month == mo.value %} selected{% endif %}>{{ mo.label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label class="helptext" for="sf-tod" style="display:block;">Time of day</label>
-      <select id="sf-tod" name="tod" onchange="this.form.submit()">
-        <option value="">Any time</option>
-        <option value="morning"{% if selected_tod == 'morning' %} selected{% endif %}>Morning (before 12:00)</option>
-        <option value="afternoon"{% if selected_tod == 'afternoon' %} selected{% endif %}>Afternoon (12:00–17:00)</option>
-        <option value="evening"{% if selected_tod == 'evening' %} selected{% endif %}>Evening (after 17:00)</option>
-      </select>
-    </div>
-    <a class="btn btn-sm btn-ghost" href="?">Reset</a>
-  </form>
   {% endif %}
 
   {# An open (or rejected) form lives here, inside the swap target. #}
@@ -117,10 +121,10 @@
               {{ s.effective_venue|default:"—" }}{% if s.effective_hall %} · {{ s.effective_hall }}{% endif %}{% if s.effective_table %} · {{ s.effective_table }}{% endif %}
             {% endif %}
           </td>
-          <td>{% if s.is_break %}<span class="muted">—</span>{% else %}{{ s.bookings.all|length }}/{{ s.capacity }}{% endif %}</td>
+          <td>{% if s.is_break %}<span class="muted">—</span>{% else %}{{ s.confirmed_count }}/{{ s.capacity }}{% endif %}</td>
           <td>
             <span class="pill {{ s.status }}">{{ s.get_status_display }}</span>
-            {% if not s.is_break and s.bookings.all|length >= s.capacity and s.status == "available" %}<span class="pill pill-gold">Full</span>{% endif %}
+            {% if not s.is_break and s.confirmed_count >= s.capacity and s.status == "available" %}<span class="pill pill-gold">Full</span>{% endif %}
           </td>
           <td><div class="row-actions">
             <button type="button" class="btn btn-sm btn-ghost" hx-get="{% url 'events:slot_edit' event.pk s.pk %}"
@@ -143,10 +147,12 @@
         </tr>
         {% endfor %}
         {% empty %}
-        <tr><td colspan="7" class="empty-row muted">No slots yet — add one, or build a whole day (or several) with the builder.</td></tr>
+        <tr><td colspan="7" class="empty-row muted">{% if selected_date or selected_tod or month_options|length > 1 %}No slots match this view — pick another month or day, or build more with the builder.{% else %}No slots yet — add one, or build a whole day (or several) with the builder.{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  {% include "partials/pagination.html" with page=slot_page qs=slot_qs label="slots" %}
 
 </div>

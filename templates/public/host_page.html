@@ -28,7 +28,6 @@
     <div>
       <label class="section-label" for="f-month" style="display:block;">Month</label>
       <select id="f-month" name="month" onchange="this.form.submit()">
-        <option value="">All months</option>
         {% for mo in month_options %}
           <option value="{{ mo.value }}"{% if selected_month == mo.value %} selected{% endif %}>{{ mo.label }}</option>
         {% endfor %}
@@ -81,7 +80,7 @@
             <p class="day-title">{{ day.grouper|date:"l, j F" }}</p>
             <div class="slot-grid">
               {% for s in day.list %}
-                {% if s.is_publicly_bookable %}
+                {% if s.bookable %}
                   {# Plain href too, so the flow still works without htmx. #}
                   <a class="slot{% if selected_slot and selected_slot.pk == s.pk %} selected{% endif %}"
                      data-slot="{{ s.pk }}"

@@ -11,7 +11,7 @@ import datetime
 
 from django.contrib import messages
 from core.decorators import staff_member_required  # app login page, not the Django admin
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -32,6 +32,12 @@ from notifications.models import NotificationLog
 from .forms import AdminBookingForm, VisitorBookingForm
 from .models import Booking
 from .services import BookingError, cancel_booking, create_booking, release_slot, reschedule_booking
+
+
+# Soonest open slots offered by the reschedule / book-for-a-visitor pickers.
+# A year-long event has tens of thousands of open slots — far too many for a
+# dropdown — so the pickers list the nearest ones.
+PICKER_SLOT_LIMIT = 300
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +66,11 @@ def public_event(request, slug):
     event = get_object_or_404(Event, public_slug=slug)
     if not event.is_publicly_open:  # FR-1.4 auto-close
         return render(request, "public/event_closed.html", {"event": event})
-    hosts = event.team_members.filter(is_active=True).prefetch_related("slots")
+    # Exists(), not a prefetch: the roster only needs to know whether a host
+    # has any slots, and a long-running host has thousands of them.
+    hosts = event.team_members.filter(is_active=True).annotate(
+        has_slots=Exists(Slot.objects.filter(host=OuterRef("pk")))
+    )
     return render(request, "public/event_page.html", {"event": event, "hosts": hosts})
 
 
@@ -108,21 +118,47 @@ def _filter_slots(slots, flt):
     return out
 
 
-def _month_options(slots):
-    """Distinct months covered by the slots, soonest first, as (value, label)
-    pairs — e.g. ("2026-03", "March 2026") — ready for a <select>."""
+def _host_schedule(request, host, around=None):
+    """The schedule a visitor sees for one host, with its filter bar.
+
+    A host on a long-running event has thousands of upcoming slots, so the
+    page always shows one month (or one exact day): the month the visitor
+    picked, else the month of ``around`` (the slot being booked), else the
+    first month that still has times. Month and day are narrowed in the
+    database; the remaining filters run over that one month.
+    """
     import calendar
 
-    seen, months = set(), []
-    for s in slots:
-        key = (s.date.year, s.date.month)
-        if key not in seen:
-            seen.add(key)
-            months.append({
-                "value": f"{s.date.year:04d}-{s.date.month:02d}",
-                "label": f"{calendar.month_name[s.date.month]} {s.date.year}",
-            })
-    return months
+    flt = _slot_filters(request)
+    upcoming = Slot.objects.filter(host=host, date__gte=timezone.localdate()).exclude(
+        status__in=[Slot.STATUS_CLOSED, Slot.STATUS_BREAK]
+    )
+    months = list(upcoming.dates("date", "month"))
+    if flt["date"] is None:
+        if flt["month"] is None and around is not None:
+            flt["month"] = around.replace(day=1)
+        if flt["month"] not in months and months:
+            flt["month"] = months[0]
+    queryset = upcoming
+    if flt["date"] is not None:
+        queryset = queryset.filter(date=flt["date"])
+    elif flt["month"] is not None:
+        queryset = queryset.filter(date__year=flt["month"].year, date__month=flt["month"].month)
+    # Taken/unavailable times are shown too (struck through) so the visitor
+    # sees the shape of the day rather than a mysteriously sparse list.
+    slots = Slot.visible_for_host(host, queryset=queryset)
+    return {
+        "slots": _filter_slots(slots, flt),
+        "filters": flt,
+        "month_options": [
+            {"value": f"{m.year:04d}-{m.month:02d}",
+             "label": f"{calendar.month_name[m.month]} {m.year}"}
+            for m in months
+        ],
+        "selected_month": (
+            f"{flt['month'].year:04d}-{flt['month'].month:02d}" if flt["month"] else ""
+        ),
+    }
 
 
 def public_host(request, slug, pk):
@@ -131,21 +167,10 @@ def public_host(request, slug, pk):
     if not event.is_publicly_open:
         return render(request, "public/event_closed.html", {"event": event})
     host = get_object_or_404(TeamMember, pk=pk, event=event, is_active=True)
-    # Show taken/unavailable times too (struck through) so the visitor can see
-    # the shape of the day rather than a mysteriously sparse list.
-    slots = Slot.visible_for_host(host)
-    flt = _slot_filters(request)
-    form = VisitorBookingForm(event=event)
-    return render(request, "public/host_page.html",
-                  {"event": event, "host": host, "form": form,
-                   "slots": _filter_slots(slots, flt),
-                   "all_slots": slots,
-                   "filters": flt,
-                   "month_options": _month_options(slots),
-                   "selected_month": (
-                       f"{flt['month'].year:04d}-{flt['month'].month:02d}"
-                       if flt["month"] else ""
-                   )})
+    host.event = event
+    context = {"event": event, "host": host, "form": VisitorBookingForm(event=event)}
+    context.update(_host_schedule(request, host))
+    return render(request, "public/host_page.html", context)
 
 
 def public_book(request, slug, slot_pk):
@@ -168,11 +193,9 @@ def public_book(request, slug, slot_pk):
         context.update(extra or {})
         if is_htmx:
             return render(request, stub_template, context)
-        context.update({
-            "slots": _filter_slots(Slot.visible_for_host(host), _slot_filters(request)),
-            "selected_slot": slot,
-            "stub_template": stub_template,
-        })
+        host.event = event
+        context.update(_host_schedule(request, host, around=slot.date))
+        context.update({"selected_slot": slot, "stub_template": stub_template})
         return render(request, "public/host_page.html", context)
 
     if request.method == "POST":
@@ -216,9 +239,11 @@ def _manage_booking(token):
 def manage_view(request, token):
     """FR-4.6 — booking summary with cancel + reschedule options."""
     booking = _manage_booking(token)
-    options = Slot.public_for_event(booking.event) if booking.slot else []
+    options = Slot.public_for_event(booking.event, limit=1) if booking.slot else []
     return render(request, "manage/manage_view.html",
                   {"booking": booking, "options": options})
+
+
 def manage_reschedule(request, token):
     """FR-4.6 — move to another open slot atomically."""
     booking = _manage_booking(token)
@@ -242,7 +267,8 @@ def manage_reschedule(request, token):
         messages.success(request, "Your meeting has been moved. A confirmation email is on its way — "
                                   "if it doesn't appear shortly, please check your spam folder.")
         return redirect("bookings_manage:manage", new_booking.manage_token)
-    options = [s for s in Slot.public_for_event(booking.event) if s.pk != booking.slot_id]
+    options = [s for s in Slot.public_for_event(booking.event, limit=PICKER_SLOT_LIMIT)
+               if s.pk != booking.slot_id]
     return render(request, "manage/reschedule.html", {"booking": booking, "options": options})
 
 
@@ -443,8 +469,12 @@ def booking_create(request):
                 return redirect("bookings_admin:admin_detail", booking.pk)
     events = Event.objects.filter(status=Event.STATUS_LIVE)
     slots = []
-    if request.GET.get("event"):
-        slots = Slot.public_for_event(Event.objects.get(pk=request.GET["event"]))
+    event_id = request.GET.get("event") or ""
+    picked_event = Event.objects.filter(pk=event_id).first() if event_id.isdigit() else None
+    if picked_event is not None:
+        slots = Slot.public_for_event(picked_event, limit=PICKER_SLOT_LIMIT)
+        if slot is not None and slot.event_id == picked_event.pk and slot not in slots:
+            slots.insert(0, slot)  # keep a pre-selected slot beyond the limit pickable
     return render(request, "bookings/booking_form.html",
                   {"form": form, "events": events, "slots": slots, "selected_slot": slot,
                    "title": "Book for a visitor"})
@@ -501,7 +531,7 @@ def booking_reschedule(request, pk):
             messages.success(request, "Booking moved — visitor notified.")
             return redirect("bookings_admin:admin_detail", new_booking.pk)
         return redirect("bookings_admin:admin_detail", booking.pk)
-    options = Slot.public_for_event(booking.event)
+    options = Slot.public_for_event(booking.event, limit=PICKER_SLOT_LIMIT)
     return render(request, "bookings/booking_reschedule.html",
                   {"booking": booking, "options": options})
 

@@ -28,4 +28,11 @@
       </tbody>
     </table>
   </div>
+  {% if bookings_hidden %}
+  <p class="helptext" style="margin:12px 0 0;">
+    Showing the latest {{ bookings|length }} —
+    <a href="{% url 'bookings_admin:admin_list' %}?event={{ event.pk }}">see all bookings for this event</a>
+    ({{ bookings_hidden }} more).
+  </p>
+  {% endif %}
 </div>
