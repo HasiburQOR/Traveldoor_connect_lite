@@ -190,7 +190,7 @@ def cover(title, subtitle, tagline):
         ("LEFTPADDING", (0, 0), (-1, -1), 16),
     ]))
     return [Spacer(1, 30 * mm), box,
-            P(f"Binomar Group Connect  |  generated {date.today():%d %b %Y}  |  internal documentation",
+            P(f"Bin Omar Group Connect  |  generated {date.today():%d %b %Y}  |  internal documentation",
               "small")]
 
 
@@ -207,7 +207,7 @@ def make_doc(path, story):
         canv.rect(0, PAGE_H - 7.2 * mm, PAGE_W, 1.2 * mm, stroke=0, fill=1)
         canv.setFont("Helvetica", 7.5)
         canv.setFillColor(MUTED)
-        canv.drawString(MARGIN, 8 * mm, "Binomar Group Connect")
+        canv.drawString(MARGIN, 8 * mm, "Bin Omar Group Connect")
         canv.drawRightString(PAGE_W - MARGIN, 8 * mm, "Page %d" % doc_.page)
         canv.restoreState()
 
@@ -257,7 +257,7 @@ def box_flow_diagram():
 def build_setup_guide():
     st = []
     st += cover("Production Setup Guide",
-                "Deploy Binomar Group Connect on Dokploy and switch on real email",
+                "Deploy Bin Omar Group Connect on Dokploy and switch on real email",
                 "Covers: push code  ->  Dokploy deploy  ->  first login  ->  SMTP mail  ->  go-live checks")
     st.append(Spacer(1, 10))
 
@@ -341,9 +341,9 @@ def build_setup_guide():
     st.append(step_card(8, "Fill in the Settings screen", [
         P("Log in as superuser -&gt; <b>Settings</b> in the top navigation. Fill in, top to bottom:", "body"),
         data_table(["Field", "What to enter", "Example"],
-                   [["Company name", "branding shown in emails + footer", "TravelDoor"],
+                   [["Company name", "branding shown in emails + footer", "Bin Omar Group"],
                     ["Public base URL", "the production address (email links)", "https://booking.yourcompany.com"],
-                    ["From name / From address", "who every email is from", "Binomar Group Connect / bookings@yourcompany.com"],
+                    ["From name / From address", "who every email is from", "Bin Omar Group Connect / bookings@yourcompany.com"],
                     ["SMTP server", "your mail provider's server", "smtp.gmail.com"],
                     ["Port + encryption", "587 + STARTTLS  or  465 + SSL (pick ONE)", "587, STARTTLS on, SSL off"],
                     ["SMTP username", "usually the full mailbox address", "bookings@yourcompany.com"],
@@ -456,7 +456,7 @@ def build_video_script():
     st.append(scene(1, "Welcome + what the app is", "0:00 - 0:30",
                     ["Show the login page https://booking.yourcompany.com/accounts/login/",
                      "Log in, land on the Dashboard, let it sit on screen"],
-                    "This is Binomar Group Connect - a booking platform for meetings and events. "
+                    "This is Bin Omar Group Connect - a booking platform for meetings and events. "
                     "Customers pick a time on a public page, everyone gets automatic confirmation and "
                     "reminder emails, and the team manages everything from this back office. "
                     "Let me walk you through both sides, starting as the admin."))

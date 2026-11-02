@@ -1,5 +1,5 @@
 """
-ASGI config for the Binomar Group Connect project.
+ASGI config for the Bin Omar Group Connect project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 """

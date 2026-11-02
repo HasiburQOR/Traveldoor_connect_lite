@@ -1,4 +1,4 @@
-# Binomar Group Connect
+# Bin Omar Group Connect
 
 Single-company, desktop-first B2B event & meeting scheduling platform built to
 **SRS v1.1 / BRD v1.0**. Django 6.1, Python 3.12, SQLite (dev) / PostgreSQL
@@ -187,7 +187,7 @@ Typical providers:
 | Most hosts (cPanel etc.) | `mail.yourdomain.com` | 465 | SSL | The mailbox password |
 
 Set **Company → Public base URL** at the same time (e.g.
-`https://book.binomargroup.ge`). Every link in every email is built from it, so
+`https://book.binomargroup.com`). Every link in every email is built from it, so
 while it points at localhost visitors get dead links.
 
 Reminder emails additionally need the scheduler running — `python manage.py

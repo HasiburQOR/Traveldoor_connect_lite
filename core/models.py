@@ -39,7 +39,7 @@ class SiteSettings(models.Model):
     )
     public_base_url = models.URLField(
         blank=True, default="",
-        help_text="The address visitors use, e.g. https://book.binomargroup.ge. "
+        help_text="The address visitors use, e.g. https://book.binomargroup.com. "
                   "Every link in every email is built from this.",
     )
 
@@ -61,7 +61,7 @@ class SiteSettings(models.Model):
 
     from_email = models.EmailField(
         blank=True, default="",
-        help_text="The address every email is sent from, e.g. bookings@binomargroup.ge.",
+        help_text="The address every email is sent from, e.g. bookings@binomargroup.com.",
     )
     from_name = models.CharField(
         max_length=100, blank=True, default="",
