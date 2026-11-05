@@ -23,9 +23,14 @@ class VisitorBookingForm(forms.Form):
 
 
 class AdminBookingForm(forms.ModelForm):
-    """Admin creating/editing a booking on a visitor's behalf (BR-12, FR-7.1)."""
+    """Admin creating/editing a booking on a visitor's behalf (BR-12, FR-7.1).
+
+    Status is deliberately absent: new bookings are always confirmed, and
+    cancelling goes through cancel_booking() so the slot reopens and both
+    parties are notified.
+    """
 
     class Meta:
         model = Booking
-        fields = ["visitor_name", "visitor_email", "visitor_phone", "company", "notes", "status"]
+        fields = ["visitor_name", "visitor_email", "visitor_phone", "company", "notes"]
         widgets = {"notes": forms.Textarea(attrs={"rows": 2})}

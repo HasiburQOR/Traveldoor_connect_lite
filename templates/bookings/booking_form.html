@@ -6,7 +6,7 @@
 <div class="page-head">
   <div>
     <h1>{{ title }}</h1>
-    <p class="sub">The visitor receives the same confirmation email as a self-service booking.</p>
+    {% if not booking %}<p class="sub">The visitor receives the same confirmation email as a self-service booking.</p>{% endif %}
   </div>
 </div>
 
@@ -15,28 +15,31 @@
     {% csrf_token %}
     {% include "partials/form_fields.html" with form=form %}
 
-    {% if events %}
-    <div class="field">
-      <label for="slot">Slot</label>
-      <select id="slot" name="slot" required>
-        <option value="">Choose an open slot…</option>
-        {% for e in events %}
-          <optgroup label="{{ e.name }}">
-            {% if request.GET.event == e.pk|stringformat:"s" and slots %}
-              {% for s in slots %}
-              <option value="{{ s.pk }}" {% if selected_slot and selected_slot.pk == s.pk %}selected{% endif %}>
-                {{ s.date|date:"j M" }} {{ s.start_time|time:"H:i" }} — {{ s.host.name }}</option>
-              {% endfor %}
-            {% endif %}
-          </optgroup>
-        {% endfor %}
-      </select>
-      <span class="helptext">Open an event and use “Book for a visitor” there to pre-load its slots.</span>
-    </div>
+    {% if not booking %}
+      {% if events %}
+      <div class="field">
+        <label for="event">Event</label>
+        <select id="event" name="event" required
+                hx-get="{% url 'bookings_admin:admin_create' %}" hx-target="#slot-field" hx-swap="innerHTML">
+          <option value="">Choose an event…</option>
+          {% for e in events %}
+          <option value="{{ e.pk }}"{% if picked_event.pk == e.pk %} selected{% endif %}>{{ e.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field" id="slot-field">
+        {% include "bookings/partials/booking_slot_field.html" %}
+      </div>
+      {% else %}
+      <div class="state-inline">
+        No events are open for booking. Publish an event first, then come back.
+        <a href="{% url 'events:list' %}">Go to events</a>
+      </div>
+      {% endif %}
     {% endif %}
 
     <div class="actions">
-      <button type="submit" class="btn btn-primary">Save booking</button>
+      {% if booking or events %}<button type="submit" class="btn btn-primary">Save booking</button>{% endif %}
       <a class="btn btn-ghost" href="{% url 'bookings_admin:admin_list' %}">Cancel</a>
     </div>
   </form>

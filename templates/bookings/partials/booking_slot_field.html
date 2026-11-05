@@ -1,0 +1,20 @@
+{# The slot picker for "Book for a visitor" — swapped by htmx when the event changes. #}
+<label for="slot">Slot</label>
+{% if slots %}
+  <select id="slot" name="slot" required>
+    <option value="">Choose an open slot…</option>
+    {% for s in slots %}
+    <option value="{{ s.pk }}"{% if selected_slot.pk == s.pk %} selected{% endif %}>{{ s.date|date:"D j M Y" }} · {{ s.start_time|time:"H:i" }} — {{ s.host.name }}</option>
+    {% endfor %}
+  </select>
+  {% if slots_truncated %}<span class="helptext">Showing the soonest {{ slot_limit }} open slots.</span>{% endif %}
+{% elif picked_event %}
+  <div class="state-inline">
+    No open slots on this event. Add or reopen a slot, or set the meeting link on online slots, then come back.
+    <a href="{% url 'events:detail' picked_event.pk %}">Manage slots</a>
+  </div>
+{% else %}
+  <select id="slot" disabled>
+    <option>Choose an event first</option>
+  </select>
+{% endif %}

@@ -251,9 +251,7 @@ def manage_reschedule(request, token):
         messages.error(request, "This booking is cancelled and can no longer be changed.")
         return redirect("bookings_manage:manage", token)
     if request.method == "POST":
-        new_slot = Slot.objects.filter(
-            pk=request.POST.get("slot"), event=booking.event
-        ).select_related("host").first()
+        new_slot = _slot_from_param(request.POST.get("slot"), event=booking.event)
         try:
             new_booking = reschedule_booking(booking, new_slot=new_slot)
         except BookingError as exc:
@@ -437,16 +435,54 @@ def booking_resend_confirmation(request, pk):
     return redirect("bookings_admin:admin_detail", booking.pk)
 
 
+def _slot_from_param(value, **filters):
+    """The slot a form field or query string names, or None if it names none."""
+    if not value or not value.isdecimal():  # isdigit() would let "²" through to int()
+        return None
+    return Slot.objects.filter(pk=value, **filters).select_related("host", "event").first()
+
+
+def _slot_field_context(event, selected=None):
+    """Template context for the book-for-a-visitor slot field."""
+    slots = []
+    if event is not None:
+        slots = Slot.public_for_event(event, limit=PICKER_SLOT_LIMIT)
+        if selected is not None and selected not in slots and selected.is_publicly_bookable():
+            slots.insert(0, selected)  # keep a pre-selected slot beyond the limit pickable
+    return {
+        "picked_event": event,
+        "slots": slots,
+        "selected_slot": selected,
+        "slots_truncated": len(slots) >= PICKER_SLOT_LIMIT,
+        "slot_limit": PICKER_SLOT_LIMIT,
+    }
+
+
 @staff_member_required
 def booking_create(request):
     """FR-7.1 / BR-12 — admin books on a visitor's behalf (e.g. by phone)."""
     form = AdminBookingForm(request.POST or None)
-    slot = None
-    slot_id = request.POST.get("slot") or request.GET.get("slot")
-    if slot_id:
-        slot = Slot.objects.filter(pk=slot_id).select_related("host", "event").first()
-    if request.method == "POST" and form.is_valid() and slot is not None:
-        if not slot.is_publicly_bookable():
+    params = request.POST if request.method == "POST" else request.GET
+    events = [
+        e for e in Event.objects.filter(status=Event.STATUS_LIVE).order_by("start_date", "name")
+        if e.is_publicly_open
+    ]
+    slot = _slot_from_param(params.get("slot"))
+    event_id = params.get("event") or (str(slot.event_id) if slot else "")
+    picked_event = next((e for e in events if str(e.pk) == event_id), None)
+    if picked_event is None and not event_id and len(events) == 1:
+        picked_event = events[0]  # nothing to choose between
+    if picked_event is not None and slot is not None and slot.event_id != picked_event.pk:
+        slot = None  # left over from a previously picked event
+
+    if request.headers.get("HX-Request"):  # the event picker changed: swap the slot field only
+        return render(request, "bookings/partials/booking_slot_field.html",
+                      _slot_field_context(picked_event, slot))
+
+    if request.method == "POST" and form.is_valid():
+        if slot is None:
+            form.add_error(None, "Choose an open slot for this booking.")
+        elif not slot.is_publicly_bookable():
             form.add_error(None, "That slot is not bookable — pick another one.")
         else:
             try:
@@ -467,17 +503,9 @@ def booking_create(request):
                 send_booking_confirmation_to_host(booking)
                 messages.success(request, "Booking created; confirmation email sent.")
                 return redirect("bookings_admin:admin_detail", booking.pk)
-    events = Event.objects.filter(status=Event.STATUS_LIVE)
-    slots = []
-    event_id = request.GET.get("event") or ""
-    picked_event = Event.objects.filter(pk=event_id).first() if event_id.isdigit() else None
-    if picked_event is not None:
-        slots = Slot.public_for_event(picked_event, limit=PICKER_SLOT_LIMIT)
-        if slot is not None and slot.event_id == picked_event.pk and slot not in slots:
-            slots.insert(0, slot)  # keep a pre-selected slot beyond the limit pickable
     return render(request, "bookings/booking_form.html",
-                  {"form": form, "events": events, "slots": slots, "selected_slot": slot,
-                   "title": "Book for a visitor"})
+                  {"form": form, "events": events, "title": "Book for a visitor",
+                   **_slot_field_context(picked_event, slot)})
 
 
 @staff_member_required
@@ -515,9 +543,7 @@ def booking_reschedule(request, pk):
     """FR-7.3 — admin moves the booking to a new slot in one transaction."""
     booking = get_object_or_404(Booking.objects.select_related("slot", "slot__host", "event"), pk=pk)
     if request.method == "POST":
-        new_slot = Slot.objects.filter(
-            pk=request.POST.get("slot"), event=booking.event
-        ).select_related("host").first()
+        new_slot = _slot_from_param(request.POST.get("slot"), event=booking.event)
         try:
             new_booking = reschedule_booking(booking, new_slot=new_slot)
         except BookingError as exc:

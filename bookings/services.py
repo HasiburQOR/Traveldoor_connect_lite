@@ -116,7 +116,7 @@ def reschedule_booking(booking, *, new_slot):
     outer transaction so callers never see a half-reschedule.
     """
     with transaction.atomic():
-        reserved_new = _atomic_reserve(new_slot.pk)
+        reserved_new = _atomic_reserve(new_slot.pk if new_slot else None)
         # Release old booking + slot.
         booking.status = Booking.STATUS_CANCELLED
         booking.cancelled_at = timezone.now()
